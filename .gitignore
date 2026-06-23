@@ -1,2 +1,3 @@
-tmp/
+tmp/*
 .claude/settings.local.json
+vantageos-core
