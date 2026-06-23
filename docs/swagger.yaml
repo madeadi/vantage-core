@@ -1,0 +1,94 @@
+basePath: /
+definitions:
+  main.AgentPayload:
+    properties:
+      name:
+        type: string
+    type: object
+  main.AgentSkill:
+    properties:
+      name:
+        type: string
+      payload:
+        $ref: '#/definitions/main.AgentPayload'
+    type: object
+  main.EventSource:
+    properties:
+      name:
+        type: string
+    type: object
+  main.registerRequest:
+    properties:
+      event_sources:
+        items:
+          $ref: '#/definitions/main.EventSource'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      skills:
+        items:
+          $ref: '#/definitions/main.AgentSkill'
+        type: array
+    type: object
+  main.registerResponse:
+    properties:
+      mqtt_host:
+        type: string
+      mqtt_port:
+        type: integer
+      mqtt_token:
+        type: string
+      mqtt_username:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: VantageOS backend — agent registry and task management.
+  title: VantageOS Core API
+  version: "1.0"
+paths:
+  /agents/register:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Called by a physical agent on boot to register its identity and skills.
+        The request must include a pre-shared device API key as a Bearer token.
+      parameters:
+      - description: Bearer <device-api-key>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Agent registration payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.registerResponse'
+        "400":
+          description: bad request
+          schema:
+            type: string
+        "401":
+          description: unauthorized
+          schema:
+            type: string
+        "500":
+          description: internal server error
+          schema:
+            type: string
+      summary: Register an agent
+      tags:
+      - agents
+swagger: "2.0"
