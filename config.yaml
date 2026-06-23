@@ -1,4 +1,0 @@
-agents:
-  - id: robot-abc-123
-    key: dev-key-abc123
-    name: Robot ABC
