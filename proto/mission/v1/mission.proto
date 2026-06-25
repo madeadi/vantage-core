@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package mission.v1;
+
+option go_package = "vantageos-core/proto/mission/v1;missionv1";
+
+import "google/protobuf/timestamp.proto";
+
+service MissionService {
+    rpc StreamMission(stream MissionClientMessage) returns (stream MissionServerMessage);
+}
+
+// client --> server
+
+message MissionClientMessage {
+    oneof payload {
+        StartMission start       = 1;
+        EndMission   end         = 2;
+        CreateTask   create_task = 3;
+    }
+}
+
+message StartMission {
+    string                    mission_id = 1; // client-generated, e.g. UUID
+    string                    name       = 2;
+    google.protobuf.Timestamp end_time   = 3;
+}
+
+message EndMission {
+    string reason = 1;
+}
+
+message CreateTask {
+    string task_type = 1;
+    bytes  payload   = 2;
+
+    oneof assignment {
+        TaskRequirements requirements = 3; // core picks a matching agent
+        string           agent_id     = 4; // mission pins a specific agent
+    }
+}
+
+message TaskRequirements {
+    repeated string skills = 1;
+}
+
+// server --> client
+
+message MissionServerMessage {
+    oneof payload {
+        MissionReady     mission_ready     = 1; // resources have been allocated
+        MissionRejected  mission_rejected  = 2;
+        TaskAccepted     task_accepted     = 3;
+        TaskStatusUpdate task_status_update = 4;
+        MissionEnded     mission_ended     = 5; // resources have been released
+    }
+}
+
+message MissionReady {
+    bool              resumed = 1; // true if reconnecting to an existing session
+    repeated TaskSnapshot tasks = 2; // in-flight tasks, populated on resume
+}
+
+message MissionRejected {
+    string reason = 1; // e.g. "agents unavailable"
+}
+
+message TaskAccepted {
+    string task_id  = 1; // server-generated task ID
+    string agent_id = 2; // agent assigned to the task
+}
+
+message TaskStatusUpdate {
+    string            task_id  = 1; // server-generated task ID
+    string            agent_id = 2;
+    MissionTaskStatus status   = 3;
+    string            message  = 4; // optional detail, e.g. error reason
+    bytes             output   = 5; // raw output bytes
+}
+
+message MissionEnded {
+    string reason = 1; // optional reason for mission termination
+}
+
+message TaskSnapshot {
+    string            task_id  = 1;
+    string            agent_id = 2;
+    MissionTaskStatus status   = 3;
+}
+
+enum MissionTaskStatus {
+    MISSION_TASK_STATUS_UNSPECIFIED = 0;
+    MISSION_TASK_STATUS_ACCEPTED    = 1;
+    MISSION_TASK_STATUS_IN_PROGRESS = 2;
+    MISSION_TASK_STATUS_COMPLETED   = 3;
+    MISSION_TASK_STATUS_FAILED      = 4;
+}

@@ -8,9 +8,17 @@ type Task struct {
 	Type    string // e.g. "GO_TO", "GO_HOME"
 	Payload []byte
 	Status  TaskStatus
+	Result  []byte
 }
 
 type TaskStatus string
+
+const (
+	TaskStatusPending   TaskStatus = "PENDING"
+	TaskStatusRunning   TaskStatus = "RUNNING"
+	TaskStatusCompleted TaskStatus = "COMPLETED"
+	TaskStatusFailed    TaskStatus = "FAILED"
+)
 
 type TaskSender interface {
 	IsOnline(id AgentID) bool

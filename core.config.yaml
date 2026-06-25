@@ -4,3 +4,8 @@ agents:
   - id: smallbot
     key: dev-key-abc123
     name: Small Bot
+
+missions:
+  - id: sps
+    name: SPS Food Delivery
+    key: sps-key
