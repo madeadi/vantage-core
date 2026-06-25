@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VantageOS Core</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+  <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+      background: #f6f8fa;
+      color: #24292f;
+      margin: 0;
+      padding: 2rem;
+      min-height: 100vh;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #1f2328;
+    }
+    .badge {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      background: #eaeef2;
+      border: 1px solid #d0d7de;
+      border-radius: 4px;
+      color: #57606a;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: #ffffff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 1.25rem;
+      box-shadow: 0 1px 3px rgba(31,35,40,0.06);
+    }
+    .card-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #1a7f37;
+      line-height: 1;
+    }
+    .card-label {
+      font-size: 0.72rem;
+      color: #57606a;
+      margin-top: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .section-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #57606a;
+      margin: 0 0 0.75rem 0;
+    }
+    .agent-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      background: #ffffff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(31,35,40,0.06);
+    }
+    .agent-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #eaeef2;
+    }
+    .agent-item:last-child { border-bottom: none; }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #1a7f37;
+      flex-shrink: 0;
+      box-shadow: 0 0 6px #1a7f3766;
+    }
+    .agent-name { color: #1f2328; flex: 1; }
+    .agent-id { color: #57606a; font-size: 0.8rem; }
+    .empty {
+      color: #57606a;
+      font-size: 0.85rem;
+      padding: 0.75rem 1rem;
+      background: #ffffff;
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(31,35,40,0.06);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>VantageOS Core</h1>
+    <span class="badge">monitor</span>
+  </header>
+
+  <div hx-ext="sse" sse-connect="/ui/events">
+    <div id="live" sse-swap="update" hx-swap="innerHTML">
+      <div class="grid">
+        <div class="card">
+          <div class="card-value">—</div>
+          <div class="card-label">Agents Connected</div>
+        </div>
+        <div class="card">
+          <div class="card-value">—</div>
+          <div class="card-label">Agents Registered</div>
+        </div>
+      </div>
+      <p class="section-title">Connected Agents</p>
+      <p class="empty">Connecting to stream…</p>
+    </div>
+  </div>
+</body>
+</html>

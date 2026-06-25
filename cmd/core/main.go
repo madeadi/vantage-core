@@ -52,6 +52,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	registry.RegisterRoutes(mux)
+	registry.RegisterUIRoutes(mux)
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 
 	// gRPC server
