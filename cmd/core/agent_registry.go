@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"log/slog"
+	"sync"
 	"vantageos-core/pkg/pubsub"
+	agentv1 "vantageos-core/proto/agent/v1"
 )
 
 type AllowedAgent struct {
@@ -12,15 +14,23 @@ type AllowedAgent struct {
 	Key     string
 }
 
+type agentStream struct {
+	stream agentv1.AgentService_StreamTasksServer
+	mu     sync.Mutex
+}
+
 type AgentRegistry struct {
+	mu            sync.RWMutex
 	tokens        map[AgentID]string
 	onlineAgents  map[AgentID]*Agent
+	streams       map[AgentID]*agentStream
 	skills        map[AgentID][]AgentSkill
 	allowedAgents []AllowedAgent // pre-shared key → agentID, issued per device at provisioning
 	ps            pubsub.PubSub
+	grpcAddr      string
 }
 
-func NewAgentRegistry(ps pubsub.PubSub, allowedAgents []AllowedAgent) *AgentRegistry {
+func NewAgentRegistry(ps pubsub.PubSub, allowedAgents []AllowedAgent, grpcAddr string) *AgentRegistry {
 	slog.Info("NewAgentRegistry")
 	for _, allowedAgent := range allowedAgents {
 		slog.Info("Agent", "agentID", allowedAgent.AgentID, "name", allowedAgent.Name)
@@ -29,25 +39,29 @@ func NewAgentRegistry(ps pubsub.PubSub, allowedAgents []AllowedAgent) *AgentRegi
 	return &AgentRegistry{
 		onlineAgents:  make(map[AgentID]*Agent),
 		tokens:        make(map[AgentID]string),
+		streams:       make(map[AgentID]*agentStream),
 		skills:        make(map[AgentID][]AgentSkill),
 		allowedAgents: allowedAgents,
 		ps:            ps,
+		grpcAddr:      grpcAddr,
 	}
 }
 
 func (r *AgentRegistry) AddAllowedAgent(agent AllowedAgent) error {
-	// ensure that the key and ID are unique
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	for _, allowedAgent := range r.allowedAgents {
 		if allowedAgent.Key == agent.Key || allowedAgent.AgentID == agent.AgentID {
 			return errors.New("AgentID or Key is not unique")
 		}
 	}
-
 	r.allowedAgents = append(r.allowedAgents, agent)
 	return nil
 }
 
 func (r *AgentRegistry) Authenticate(agentID AgentID, token string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	t, ok := r.tokens[agentID]
 	if !ok {
 		return false
@@ -55,53 +69,103 @@ func (r *AgentRegistry) Authenticate(agentID AgentID, token string) bool {
 	return t == token
 }
 
-func (r *AgentRegistry) Register(agent *Agent, skills []AgentSkill) {
+func (r *AgentRegistry) Register(agent *Agent, token string, skills []AgentSkill) {
 	slog.Info("Registering Agent", "agent", agent.Name)
-	r.onlineAgents[agent.ID] = agent
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.tokens[agent.ID] = token
 	r.skills[agent.ID] = skills
 }
 
 func (r *AgentRegistry) Unregister(agentID AgentID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	delete(r.onlineAgents, agentID)
 }
 
 func (r *AgentRegistry) AddSkill(agentID AgentID, skill AgentSkill) error {
-	// if agent is not online, return an error
-	if !r.isOnline(agentID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.isOnlineLocked(agentID) {
 		return errors.New("Agent not found")
 	}
-
-	// if skill payload is invalid, return an error
 	if !r.verifySkillPayload(skill) {
 		return errors.New("Invalid skill payload")
 	}
-
-	// overwrite the skill if it already exists
 	for i, s := range r.skills[agentID] {
 		if s.Name == skill.Name {
 			r.skills[agentID][i] = skill
 			return nil
 		}
 	}
-
-	// otherwise, append the skill to the list
 	r.skills[agentID] = append(r.skills[agentID], skill)
 	return nil
 }
 
-func (r *AgentRegistry) isOnline(agentID AgentID) bool {
+func (r *AgentRegistry) IsOnline(agentID AgentID) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.isOnlineLocked(agentID)
+}
+
+// isOnlineLocked checks online status; caller must hold at least r.mu.RLock.
+func (r *AgentRegistry) isOnlineLocked(agentID AgentID) bool {
 	_, ok := r.onlineAgents[agentID]
 	return ok
 }
 
-func (r *AgentRegistry) verifySkillPayload(skill AgentSkill) bool {
-	if skill.Payload.Name == "" {
-		return false
+func (r *AgentRegistry) nameFor(agentID AgentID) string {
+	for _, a := range r.allowedAgents {
+		if a.AgentID == agentID {
+			return a.Name
+		}
 	}
-	return true
+	return ""
+}
+
+// attachStream marks an agent online and stores its live gRPC stream.
+func (r *AgentRegistry) attachStream(agentID AgentID, s agentv1.AgentService_StreamTasksServer) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.onlineAgents[agentID] = &Agent{ID: agentID, Name: r.nameFor(agentID)}
+	r.streams[agentID] = &agentStream{stream: s}
+}
+
+// detachStream marks an agent offline and removes its stream.
+func (r *AgentRegistry) detachStream(agentID AgentID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.onlineAgents, agentID)
+	delete(r.streams, agentID)
+}
+
+// SendTask pushes a task down the agent's live gRPC stream.
+func (r *AgentRegistry) SendTask(task *Task) error {
+	r.mu.RLock()
+	as, ok := r.streams[task.AgentID]
+	r.mu.RUnlock()
+	if !ok {
+		return errors.New("no active stream for agent")
+	}
+	msg := &agentv1.ServerMessage{
+		Payload: &agentv1.ServerMessage_Task{Task: &agentv1.Task{
+			Id:      task.ID,
+			Type:    task.Type,
+			Payload: task.Payload,
+		}},
+	}
+	as.mu.Lock()
+	defer as.mu.Unlock()
+	return as.stream.Send(msg)
+}
+
+func (r *AgentRegistry) verifySkillPayload(skill AgentSkill) bool {
+	return skill.Payload.Name != ""
 }
 
 func (r *AgentRegistry) GetSkill(agentID AgentID, name string) (AgentSkill, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	for _, skill := range r.skills[agentID] {
 		if skill.Name == name {
 			return skill, true
