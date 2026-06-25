@@ -2,24 +2,16 @@ package main
 
 import (
 	"log/slog"
-	"vantageos-core/pkg/pubsub"
+
+	agentv1 "vantageos-core/proto/agent/v1"
 )
 
-type TelemetryListener struct {
-	subscriber pubsub.Subscriber
+type TelemetryListener struct{}
+
+func NewTelemetryListener() *TelemetryListener {
+	return &TelemetryListener{}
 }
 
-func NewTelemetryListener(subscriber pubsub.Subscriber) *TelemetryListener {
-	return &TelemetryListener{subscriber: subscriber}
-}
-
-func (t *TelemetryListener) Watch(agentID AgentID) {
-	topic := "agents/" + string(agentID) + "/telemetry"
-	t.subscriber.Subscribe(topic, func(_ string, payload []byte) {
-		slog.Info("telemetry received", "agent", agentID, "payload", string(payload))
-	})
-}
-
-func (t *TelemetryListener) Unwatch(agentID AgentID) {
-	t.subscriber.Unsubscribe("agents/" + string(agentID) + "/telemetry")
+func (t *TelemetryListener) Handle(agentID AgentID, event *agentv1.TelemetryEvent) {
+	slog.Info("telemetry received", "agent", agentID, "payload", string(event.Payload))
 }

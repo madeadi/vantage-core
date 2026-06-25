@@ -2,19 +2,24 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
-	"os/signal"
 	"syscall"
+	"time"
 	"vantageos-core/pkg/agent"
+	agentv1 "vantageos-core/proto/agent/v1"
 
-	"github.com/gorilla/websocket"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v3"
+	"os/signal"
 )
 
 type Config struct {
@@ -22,6 +27,7 @@ type Config struct {
 	AgentKey  string `yaml:"key"`
 	AgentName string `yaml:"name"`
 	CoreURL   string `yaml:"core_url"`
+	GRPCAddr  string `yaml:"grpc_addr"`
 }
 
 type registerRequest struct {
@@ -29,12 +35,6 @@ type registerRequest struct {
 	Name         string        `json:"name"`
 	Skills       []interface{} `json:"skills"`
 	EventSources []interface{} `json:"event_sources"`
-}
-
-type wsEnvelope struct {
-	Type    string `json:"type"`
-	Topic   string `json:"topic"`
-	Payload []byte `json:"payload,omitempty"`
 }
 
 func loadConfig(path string) (*Config, error) {
@@ -86,29 +86,136 @@ func register(cfg *Config) (*agent.RegisterResponse, error) {
 	return &regResp, nil
 }
 
-func connectWS(cfg *Config, regResp *agent.RegisterResponse) (*websocket.Conn, error) {
-	coreURL, err := url.Parse(cfg.CoreURL)
+// tokenCreds injects the bearer token into every gRPC call's metadata.
+type tokenCreds struct {
+	token string
+}
+
+func (t tokenCreds) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
+	return map[string]string{"authorization": "Bearer " + t.token}, nil
+}
+
+func (t tokenCreds) RequireTransportSecurity() bool { return false }
+
+func runStreamTasks(ctx context.Context, client agentv1.AgentServiceClient, agentID string) {
+	md := metadata.Pairs("agent_id", agentID)
+	streamCtx := metadata.NewOutgoingContext(ctx, md)
+
+	stream, err := client.StreamTasks(streamCtx)
 	if err != nil {
-		return nil, err
+		slog.Error("failed to open StreamTasks", "err", err)
+		return
 	}
+	slog.Info("StreamTasks stream open")
 
-	wsScheme := "ws"
-	if coreURL.Scheme == "https" {
-		wsScheme = "wss"
+	var currentTaskCancel context.CancelFunc
+
+	for {
+		msg, err := stream.Recv()
+		if err == io.EOF || ctx.Err() != nil {
+			slog.Info("StreamTasks stream closed")
+			return
+		}
+		if err != nil {
+			slog.Error("StreamTasks recv error", "err", err)
+			return
+		}
+
+		switch payload := msg.Payload.(type) {
+		case *agentv1.ServerMessage_Task:
+			task := payload.Task
+			slog.Info("task received", "id", task.Id, "type", task.Type)
+
+			if currentTaskCancel != nil {
+				currentTaskCancel()
+			}
+			taskCtx, cancel := context.WithCancel(ctx)
+			currentTaskCancel = cancel
+
+			go func(t *agentv1.Task, tCtx context.Context) {
+				if err := stream.Send(&agentv1.TaskAck{
+					TaskId: t.Id,
+					Status: agentv1.TaskStatus_TASK_STATUS_STARTED,
+				}); err != nil {
+					slog.Error("failed to send STARTED ack", "err", err)
+					return
+				}
+
+				// simulate work — replace with real task execution
+				select {
+				case <-time.After(5 * time.Second):
+					if err := stream.Send(&agentv1.TaskAck{
+						TaskId: t.Id,
+						Status: agentv1.TaskStatus_TASK_STATUS_FINISHED,
+					}); err != nil {
+						slog.Error("failed to send FINISHED ack", "err", err)
+					}
+					slog.Info("task finished", "id", t.Id)
+				case <-tCtx.Done():
+					// cancelled by AbortCommand
+				}
+			}(task, taskCtx)
+
+		case *agentv1.ServerMessage_Abort:
+			slog.Info("abort received", "task_id", payload.Abort.TaskId)
+			if currentTaskCancel != nil {
+				currentTaskCancel()
+				currentTaskCancel = nil
+			}
+			if err := stream.Send(&agentv1.TaskAck{
+				TaskId: payload.Abort.TaskId,
+				Status: agentv1.TaskStatus_TASK_STATUS_ABORTED,
+			}); err != nil {
+				slog.Error("failed to send ABORTED ack", "err", err)
+			}
+		}
 	}
+}
 
-	wsURL := url.URL{
-		Scheme: wsScheme,
-		Host:   coreURL.Host,
-		Path:   regResp.WSURL,
-		RawQuery: url.Values{
-			"agent_id": {cfg.AgentID},
-			"token":    {regResp.Token},
-		}.Encode(),
+func runTelemetry(ctx context.Context, client agentv1.AgentServiceClient, agentID string) {
+	stream, err := client.ReportTelemetry(ctx)
+	if err != nil {
+		slog.Error("failed to open ReportTelemetry", "err", err)
+		return
 	}
+	slog.Info("ReportTelemetry stream open")
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL.String(), nil)
-	return conn, err
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			_ = stream.CloseSend()
+			return
+		case <-ticker.C:
+			if err := stream.Send(&agentv1.TelemetryEvent{
+				AgentId: agentID,
+				Payload: []byte(`{"status":"ok"}`),
+			}); err != nil {
+				slog.Error("telemetry send error", "err", err)
+				return
+			}
+		}
+	}
+}
+
+func connectAndRun(ctx context.Context, grpcAddr string, agentID string, token string) {
+	conn, err := grpc.NewClient(
+		grpcAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithPerRPCCredentials(tokenCreds{token: token}),
+	)
+	if err != nil {
+		slog.Error("failed to dial gRPC", "err", err)
+		return
+	}
+	defer conn.Close()
+
+	client := agentv1.NewAgentServiceClient(conn)
+
+	go runTelemetry(ctx, client, agentID)
+	runStreamTasks(ctx, client, agentID)
 }
 
 func main() {
@@ -128,44 +235,28 @@ func main() {
 		slog.Error("registration failed", "err", err)
 		return
 	}
-	slog.Info("registered", "agent_id", regResp.AgentID, "ws_url", regResp.WSURL)
+	slog.Info("registered", "agent_id", regResp.AgentID)
 
-	conn, err := connectWS(cfg, regResp)
-	if err != nil {
-		slog.Error("failed to connect websocket", "err", err)
-		return
-	}
-	defer conn.Close()
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
-	// subscribe to our task topic
-	sub, _ := json.Marshal(wsEnvelope{Type: "subscribe", Topic: regResp.TopicTasks})
-	if err := conn.WriteMessage(websocket.TextMessage, sub); err != nil {
-		slog.Error("failed to subscribe", "err", err)
-		return
-	}
-	slog.Info("subscribed", "topic", regResp.TopicTasks)
+	const backoffMax = 30 * time.Second
+	backoff := time.Second
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		for {
-			_, data, err := conn.ReadMessage()
-			if err != nil {
-				slog.Error("ws read error", "err", err)
-				return
-			}
-			var env wsEnvelope
-			if err := json.Unmarshal(data, &env); err != nil {
-				slog.Warn("unreadable ws message", "err", err)
-				continue
-			}
-			if env.Type == "message" {
-				slog.Info("task received", "topic", env.Topic, "payload", string(env.Payload))
-			}
+	for ctx.Err() == nil {
+		connectAndRun(ctx, regResp.GRPCAddr, regResp.AgentID, regResp.Token)
+		if ctx.Err() != nil {
+			break
 		}
-	}()
+		slog.Info("stream disconnected, reconnecting", "in", backoff)
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+		}
+		if backoff < backoffMax {
+			backoff *= 2
+		}
+	}
 
-	<-quit
 	slog.Info("shutting down")
 }

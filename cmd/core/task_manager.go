@@ -1,9 +1,6 @@
 package main
 
-import (
-	"errors"
-	"vantageos-core/pkg/pubsub"
-)
+import "errors"
 
 type Task struct {
 	ID      string
@@ -15,29 +12,25 @@ type Task struct {
 
 type TaskStatus string
 
-type Onliner interface {
+type TaskSender interface {
 	IsOnline(id AgentID) bool
+	SendTask(task *Task) error
 }
 
 type TaskManager struct {
-	onliner      Onliner
-	publisher    pubsub.Publisher
+	sender       TaskSender
 	currentTasks map[AgentID]*Task
 }
 
-// StartTask starts the task and send it to the appropriate agent.
-// Cannot send the task when the agent is: offline or busy
+// StartTask dispatches a task to the agent via its live gRPC stream.
+// Returns an error if the agent is offline or already has a running task.
 func (t *TaskManager) StartTask(task *Task) error {
-	if !t.onliner.IsOnline(task.AgentID) {
+	if !t.sender.IsOnline(task.AgentID) {
 		return errors.New("cannot start task: agent is offline")
 	}
-
 	if _, ok := t.currentTasks[task.AgentID]; ok {
 		return errors.New("cannot start task: agent is busy")
 	}
-
 	t.currentTasks[task.AgentID] = task
-	t.publisher.Publish("agents/"+string(task.AgentID)+"/tasks", task.Payload)
-
-	return nil
+	return t.sender.SendTask(task)
 }

@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package agent.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "vantageos-core/proto/agent/v1;agentv1";
+
+// AgentService is the gRPC contract between core and agents.
+service AgentService {
+    // Core streams tasks down to the agent.
+    rpc StreamTasks(stream TaskAck) returns (stream ServerMessage);
+
+    // Agent streams telemetry up to core.
+    rpc ReportTelemetry(stream TelemetryEvent) returns (TelemetryAck);
+}
+
+message ServerMessage {
+    oneof payload {
+        Task task = 1;
+        AbortCommand abort = 2;
+    }
+}
+
+message AbortCommand {
+  string task_id = 1;
+}
+
+message TaskAck {
+    string task_id = 1;
+    TaskStatus status = 2; // robot sends: CANNOT_START, STARTED, ABORTED, FAILED, FINISHED
+    string error_message = 3; // populated on FAILED
+}
+
+message Task {
+    string id      = 1;
+    string type    = 2; // e.g. "GO_TO", "GO_HOME"
+    bytes  payload = 3; // opaque task payload (matches current Task.Payload)
+    // if the task is not executed within this time, it will be expired
+    google.protobuf.Timestamp to_expire_at   = 4;
+    // if the task is not completed within this time, it will be finalised
+    google.protobuf.Timestamp to_finalise_at = 5;
+
+    // The agent context contains information that can be used
+    // by agent to pass message to other agents.
+    // Please use with care, because it is not guaranteed to be available.
+    AgentContext agent_context = 6;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_DRAFT       = 1;
+  TASK_STATUS_STARTING    = 2;
+  TASK_STATUS_CANNOT_START = 3;
+  TASK_STATUS_STARTED     = 4;
+  TASK_STATUS_EXPIRING    = 5;
+  TASK_STATUS_EXPIRED     = 6;
+  TASK_STATUS_ABORTING    = 7;
+  TASK_STATUS_ABORTED     = 8;
+  TASK_STATUS_FAILED      = 9;
+  TASK_STATUS_FINISHING   = 10;
+  TASK_STATUS_FINISHED    = 11;
+}
+
+message AgentContext {
+    string mission_id = 1;
+    string mission_context = 2;
+    bytes context = 3;
+}
+
+message TelemetryEvent {
+    string agent_id = 1;
+    bytes  payload  = 2; // opaque telemetry payload (matches current raw bytes)
+}
+
+message TelemetryAck {}

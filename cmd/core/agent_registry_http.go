@@ -65,16 +65,13 @@ func (r *AgentRegistry) handleRegister(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	r.Register(&Agent{ID: body.ID, Name: body.Name}, body.Skills)
-	r.tokens[agentID] = token
+	r.Register(&Agent{ID: body.ID, Name: body.Name}, token, body.Skills)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(agent.RegisterResponse{
-		AgentID:        string(agentID),
-		Token:          token,
-		WSURL:          "/ws",
-		TopicTasks:     "agents/" + string(agentID) + "/tasks",
-		TopicTelemetry: "agents/" + string(agentID) + "/telemetry",
+		AgentID:  string(agentID),
+		Token:    token,
+		GRPCAddr: r.grpcAddr,
 	})
 }
 

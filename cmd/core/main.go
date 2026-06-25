@@ -8,12 +8,15 @@ package main
 import (
 	"flag"
 	"log/slog"
+	"net"
 	"net/http"
 
 	_ "vantageos-core/docs"
 	"vantageos-core/pkg/pubsub"
+	agentv1 "vantageos-core/proto/agent/v1"
 
 	httpSwagger "github.com/swaggo/http-swagger"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -38,7 +41,13 @@ func main() {
 			Name:    agent.Name,
 		})
 	}
-	registry := NewAgentRegistry(hub, allowedAgents)
+	grpcAddr := cfg.GRPCAddr
+	if grpcAddr == "" {
+		grpcAddr = ":9090"
+	}
+	registry := NewAgentRegistry(hub, allowedAgents, grpcAddr)
+	tm := &TaskManager{sender: registry, currentTasks: make(map[AgentID]*Task)}
+	_ = tm // wired; expose via HTTP handlers in a follow-on
 
 	mux := http.NewServeMux()
 	registry.RegisterRoutes(mux)
@@ -52,6 +61,24 @@ func main() {
 		hub.ServeHTTP(w, r)
 	})
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
+
+	// gRPC server
+	lis, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		slog.Error("failed to listen on gRPC port", "err", err)
+		return
+	}
+	grpcServer := grpc.NewServer(
+		grpc.StreamInterceptor(authStreamInterceptor(registry)),
+	)
+	telemetry := NewTelemetryListener()
+	agentv1.RegisterAgentServiceServer(grpcServer, &agentGRPCServer{registry: registry, telemetry: telemetry})
+	go func() {
+		slog.Info("gRPC listening", "addr", grpcAddr)
+		if err := grpcServer.Serve(lis); err != nil {
+			slog.Error("gRPC server stopped", "err", err)
+		}
+	}()
 
 	slog.Info("HTTP listening", "addr", ":8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {

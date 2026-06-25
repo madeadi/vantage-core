@@ -2,3 +2,4 @@ id: smallbot
 key: dev-key-abc123
 name: Small Bot
 core_url: http://localhost:8080
+grpc_addr: localhost:9090
