@@ -30,7 +30,7 @@ func (r *AgentRegistry) RegisterRoutes(mux *http.ServeMux) {
 // @Produce     json
 // @Param       Authorization  header    string           true  "Bearer <device-api-key>"
 // @Param       body           body      registerRequest  true  "Agent registration payload"
-// @Success     200            {object}  registerResponse
+// @Success     200            {object}  agent.RegisterResponse
 // @Failure     400            {string}  string  "bad request"
 // @Failure     401            {string}  string  "unauthorized"
 // @Failure     500            {string}  string  "internal server error"

@@ -12,7 +12,6 @@ import (
 	"net/http"
 
 	_ "vantageos-core/docs"
-	"vantageos-core/pkg/pubsub"
 	agentv1 "vantageos-core/proto/agent/v1"
 
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -31,8 +30,6 @@ func main() {
 		return
 	}
 
-	hub := pubsub.NewWSHub()
-
 	var allowedAgents []AllowedAgent
 	for _, agent := range cfg.Agents {
 		allowedAgents = append(allowedAgents, AllowedAgent{
@@ -49,21 +46,12 @@ func main() {
 	if grpcAdvertiseAddr == "" {
 		grpcAdvertiseAddr = "localhost:9090"
 	}
-	registry := NewAgentRegistry(hub, allowedAgents, grpcAdvertiseAddr)
+	registry := NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
 	tm := &TaskManager{sender: registry, currentTasks: make(map[AgentID]*Task)}
 	_ = tm // wired; expose via HTTP handlers in a follow-on
 
 	mux := http.NewServeMux()
 	registry.RegisterRoutes(mux)
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		agentID := AgentID(r.URL.Query().Get("agent_id"))
-		token := r.URL.Query().Get("token")
-		if !registry.Authenticate(agentID, token) {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		hub.ServeHTTP(w, r)
-	})
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 
 	// gRPC server

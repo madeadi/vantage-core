@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
-	"vantageos-core/pkg/pubsub"
 	agentv1 "vantageos-core/proto/agent/v1"
 )
 
@@ -25,12 +24,11 @@ type AgentRegistry struct {
 	onlineAgents  map[AgentID]*Agent
 	streams       map[AgentID]*agentStream
 	skills        map[AgentID][]AgentSkill
-	allowedAgents []AllowedAgent // pre-shared key → agentID, issued per device at provisioning
-	ps            pubsub.PubSub
+	allowedAgents     []AllowedAgent // pre-shared key → agentID, issued per device at provisioning
 	grpcAdvertiseAddr string
 }
 
-func NewAgentRegistry(ps pubsub.PubSub, allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *AgentRegistry {
+func NewAgentRegistry(allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *AgentRegistry {
 	slog.Info("NewAgentRegistry")
 	for _, allowedAgent := range allowedAgents {
 		slog.Info("Agent", "agentID", allowedAgent.AgentID, "name", allowedAgent.Name)
@@ -42,7 +40,6 @@ func NewAgentRegistry(ps pubsub.PubSub, allowedAgents []AllowedAgent, grpcAdvert
 		streams:           make(map[AgentID]*agentStream),
 		skills:            make(map[AgentID][]AgentSkill),
 		allowedAgents:     allowedAgents,
-		ps:                ps,
 		grpcAdvertiseAddr: grpcAdvertiseAddr,
 	}
 }

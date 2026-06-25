@@ -42,7 +42,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/main.registerRequest"
+                            "$ref": "#/definitions/cmd_core.registerRequest"
                         }
                     }
                 ],
@@ -50,7 +50,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/main.registerResponse"
+                            "$ref": "#/definitions/agent.RegisterResponse"
                         }
                     },
                     "400": {
@@ -76,6 +76,43 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "agent.RegisterResponse": {
+            "type": "object",
+            "properties": {
+                "agent_id": {
+                    "type": "string"
+                },
+                "grpc_addr": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "cmd_core.registerRequest": {
+            "type": "object",
+            "properties": {
+                "event_sources": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.EventSource"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/main.AgentSkill"
+                    }
+                }
+            }
+        },
         "main.AgentPayload": {
             "type": "object",
             "properties": {
@@ -99,46 +136,6 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "main.registerRequest": {
-            "type": "object",
-            "properties": {
-                "event_sources": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/main.EventSource"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "skills": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/main.AgentSkill"
-                    }
-                }
-            }
-        },
-        "main.registerResponse": {
-            "type": "object",
-            "properties": {
-                "mqtt_host": {
-                    "type": "string"
-                },
-                "mqtt_port": {
-                    "type": "integer"
-                },
-                "mqtt_token": {
-                    "type": "string"
-                },
-                "mqtt_username": {
                     "type": "string"
                 }
             }

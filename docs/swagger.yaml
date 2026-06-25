@@ -1,5 +1,29 @@
 basePath: /
 definitions:
+  agent.RegisterResponse:
+    properties:
+      agent_id:
+        type: string
+      grpc_addr:
+        type: string
+      token:
+        type: string
+    type: object
+  cmd_core.registerRequest:
+    properties:
+      event_sources:
+        items:
+          $ref: '#/definitions/main.EventSource'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      skills:
+        items:
+          $ref: '#/definitions/main.AgentSkill'
+        type: array
+    type: object
   main.AgentPayload:
     properties:
       name:
@@ -15,32 +39,6 @@ definitions:
   main.EventSource:
     properties:
       name:
-        type: string
-    type: object
-  main.registerRequest:
-    properties:
-      event_sources:
-        items:
-          $ref: '#/definitions/main.EventSource'
-        type: array
-      id:
-        type: string
-      name:
-        type: string
-      skills:
-        items:
-          $ref: '#/definitions/main.AgentSkill'
-        type: array
-    type: object
-  main.registerResponse:
-    properties:
-      mqtt_host:
-        type: string
-      mqtt_port:
-        type: integer
-      mqtt_token:
-        type: string
-      mqtt_username:
         type: string
     type: object
 host: localhost:8080
@@ -68,14 +66,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/main.registerRequest'
+          $ref: '#/definitions/cmd_core.registerRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/main.registerResponse'
+            $ref: '#/definitions/agent.RegisterResponse'
         "400":
           description: bad request
           schema:
