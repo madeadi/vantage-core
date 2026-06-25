@@ -173,7 +173,9 @@ func runStreamTasks(ctx context.Context, client agentv1.AgentServiceClient, agen
 }
 
 func runTelemetry(ctx context.Context, client agentv1.AgentServiceClient, agentID string) {
-	stream, err := client.ReportTelemetry(ctx)
+	md := metadata.Pairs("agent_id", agentID)
+	streamCtx := metadata.NewOutgoingContext(ctx, md)
+	stream, err := client.ReportTelemetry(streamCtx)
 	if err != nil {
 		slog.Error("failed to open ReportTelemetry", "err", err)
 		return

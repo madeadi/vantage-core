@@ -1,3 +1,5 @@
 tmp/*
 .claude/settings.local.json
 vantageos-core
+/core
+/smallbot
