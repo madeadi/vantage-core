@@ -41,11 +41,15 @@ func main() {
 			Name:    agent.Name,
 		})
 	}
-	grpcAddr := cfg.GRPCAddr
-	if grpcAddr == "" {
-		grpcAddr = ":9090"
+	grpcListenAddr := cfg.GRPCListenAddr
+	if grpcListenAddr == "" {
+		grpcListenAddr = ":9090"
 	}
-	registry := NewAgentRegistry(hub, allowedAgents, grpcAddr)
+	grpcAdvertiseAddr := cfg.GRPCAdvertiseAddr
+	if grpcAdvertiseAddr == "" {
+		grpcAdvertiseAddr = "localhost:9090"
+	}
+	registry := NewAgentRegistry(hub, allowedAgents, grpcAdvertiseAddr)
 	tm := &TaskManager{sender: registry, currentTasks: make(map[AgentID]*Task)}
 	_ = tm // wired; expose via HTTP handlers in a follow-on
 
@@ -63,7 +67,7 @@ func main() {
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 
 	// gRPC server
-	lis, err := net.Listen("tcp", grpcAddr)
+	lis, err := net.Listen("tcp", grpcListenAddr)
 	if err != nil {
 		slog.Error("failed to listen on gRPC port", "err", err)
 		return
@@ -74,7 +78,7 @@ func main() {
 	telemetry := NewTelemetryListener()
 	agentv1.RegisterAgentServiceServer(grpcServer, &agentGRPCServer{registry: registry, telemetry: telemetry})
 	go func() {
-		slog.Info("gRPC listening", "addr", grpcAddr)
+		slog.Info("gRPC listening", "addr", grpcListenAddr)
 		if err := grpcServer.Serve(lis); err != nil {
 			slog.Error("gRPC server stopped", "err", err)
 		}

@@ -71,7 +71,7 @@ func (r *AgentRegistry) handleRegister(w http.ResponseWriter, req *http.Request)
 	json.NewEncoder(w).Encode(agent.RegisterResponse{
 		AgentID:  string(agentID),
 		Token:    token,
-		GRPCAddr: r.grpcAddr,
+		GRPCAddr: r.grpcAdvertiseAddr,
 	})
 }
 

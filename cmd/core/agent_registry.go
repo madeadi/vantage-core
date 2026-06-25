@@ -27,23 +27,23 @@ type AgentRegistry struct {
 	skills        map[AgentID][]AgentSkill
 	allowedAgents []AllowedAgent // pre-shared key → agentID, issued per device at provisioning
 	ps            pubsub.PubSub
-	grpcAddr      string
+	grpcAdvertiseAddr string
 }
 
-func NewAgentRegistry(ps pubsub.PubSub, allowedAgents []AllowedAgent, grpcAddr string) *AgentRegistry {
+func NewAgentRegistry(ps pubsub.PubSub, allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *AgentRegistry {
 	slog.Info("NewAgentRegistry")
 	for _, allowedAgent := range allowedAgents {
 		slog.Info("Agent", "agentID", allowedAgent.AgentID, "name", allowedAgent.Name)
 	}
 
 	return &AgentRegistry{
-		onlineAgents:  make(map[AgentID]*Agent),
-		tokens:        make(map[AgentID]string),
-		streams:       make(map[AgentID]*agentStream),
-		skills:        make(map[AgentID][]AgentSkill),
-		allowedAgents: allowedAgents,
-		ps:            ps,
-		grpcAddr:      grpcAddr,
+		onlineAgents:      make(map[AgentID]*Agent),
+		tokens:            make(map[AgentID]string),
+		streams:           make(map[AgentID]*agentStream),
+		skills:            make(map[AgentID][]AgentSkill),
+		allowedAgents:     allowedAgents,
+		ps:                ps,
+		grpcAdvertiseAddr: grpcAdvertiseAddr,
 	}
 }
 

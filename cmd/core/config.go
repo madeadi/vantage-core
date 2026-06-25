@@ -7,8 +7,9 @@ import (
 )
 
 type Config struct {
-	Agents   []AgentConfig `yaml:"agents"`
-	GRPCAddr string        `yaml:"grpc_addr"`
+	Agents            []AgentConfig `yaml:"agents"`
+	GRPCListenAddr    string        `yaml:"grpc_listen_addr"`
+	GRPCAdvertiseAddr string        `yaml:"grpc_advertise_addr"`
 }
 
 type AgentConfig struct {

@@ -1,4 +1,5 @@
-grpc_addr: localhost:9090
+grpc_listen_addr: ":9090"
+grpc_advertise_addr: "localhost:9090"
 agents:
   - id: smallbot
     key: dev-key-abc123
