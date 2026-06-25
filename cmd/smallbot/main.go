@@ -232,21 +232,30 @@ func main() {
 		return
 	}
 
-	regResp, err := register(cfg)
-	if err != nil {
-		slog.Error("registration failed", "err", err)
-		return
-	}
-	slog.Info("registered", "agent_id", regResp.AgentID)
-
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	const backoffMax = 30 * time.Second
+	const backoffMax = 60 * time.Second
 	backoff := time.Second
 
 	for ctx.Err() == nil {
+		regResp, err := register(cfg)
+		if err != nil {
+			slog.Error("registration failed, will retry", "err", err, "in", backoff)
+			select {
+			case <-time.After(backoff):
+			case <-ctx.Done():
+			}
+			if backoff < backoffMax {
+				backoff *= 2
+			}
+			continue
+		}
+		slog.Info("registered", "agent_id", regResp.AgentID)
+		backoff = time.Second
+
 		connectAndRun(ctx, regResp.GRPCAddr, regResp.AgentID, regResp.Token)
+
 		if ctx.Err() != nil {
 			break
 		}
