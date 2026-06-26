@@ -59,7 +59,7 @@ func (mr *MissionRegistry) StartOrResume(
 			snapshots = append(snapshots, &missionv1.TaskSnapshot{
 				TaskId:  task.ID,
 				AgentId: string(task.AgentID),
-				Status:  convertTaskStatus(task.Status),
+				Status:  toMissionTaskStatus(task.Status),
 			})
 		}
 	}
@@ -113,40 +113,32 @@ func (mr *MissionRegistry) AddTask(msId MissionID, task Task) error {
 	return nil
 }
 
-func (mr *MissionRegistry) UpdateExecutionStatus(
-	taskID string,
-	agentID string,
-	status TaskStatus,
-	message string,
-	result []byte,
-) {
+func (mr *MissionRegistry) UpdateExecutionStatus(task Task) {
+	if task.Transient() {
+		slog.Info("Transient status, ignoring.")
+		return
+	}
+
 	mr.mu.Lock()
 
-	msId, ok := mr.taskToMission[taskID]
-	if !ok {
-		mr.mu.Unlock()
-		slog.Error("cannot find mission for task", "taskID", taskID)
-		return
-	}
-
-	ms := mr.missions[msId]
+	ms := mr.missions[task.MissionID]
 	if ms == nil || !ms.Active() {
 		mr.mu.Unlock()
-		slog.Error("mission is not active", "msId", msId)
+		slog.Error("mission is not active", "missionID", task.MissionID)
 		return
 	}
 
-	stream, ok := mr.streams[msId]
+	stream, ok := mr.streams[task.MissionID]
 	if !ok {
 		mr.mu.Unlock()
-		slog.Error("no stream for mission", "msId", msId)
+		slog.Error("no stream for mission", "missionID", task.MissionID)
 		return
 	}
 
-	for i := range mr.missionTasks[msId] {
-		if mr.missionTasks[msId][i].ID == taskID {
-			mr.missionTasks[msId][i].Status = status
-			mr.missionTasks[msId][i].Result = result
+	for i := range mr.missionTasks[task.MissionID] {
+		if mr.missionTasks[task.MissionID][i].ID == task.ID {
+			mr.missionTasks[task.MissionID][i].Status = task.Status
+			mr.missionTasks[task.MissionID][i].Result = task.Result
 			break
 		}
 	}
@@ -156,25 +148,22 @@ func (mr *MissionRegistry) UpdateExecutionStatus(
 	stream.Send(&missionv1.MissionServerMessage{
 		Payload: &missionv1.MissionServerMessage_TaskStatusUpdate{
 			TaskStatusUpdate: &missionv1.TaskStatusUpdate{
-				TaskId:  taskID,
-				Status:  convertTaskStatus(status),
-				AgentId: agentID,
-				Output:  result,
-				Message: message,
+				TaskId:  task.ID,
+				Status:  toMissionTaskStatus(task.Status),
+				AgentId: string(task.AgentID),
+				Output:  task.Result,
 			},
 		},
 	})
 }
 
-func convertTaskStatus(status TaskStatus) missionv1.MissionTaskStatus {
-	switch status {
-	case TaskStatusPending:
-		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_ACCEPTED
-	case TaskStatusRunning:
+func toMissionTaskStatus(agentStatus TaskStatus) missionv1.MissionTaskStatus {
+	switch agentStatus {
+	case TaskStatusStarted:
 		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_IN_PROGRESS
-	case TaskStatusCompleted:
+	case TaskStatusFinished:
 		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_COMPLETED
-	case TaskStatusFailed:
+	case TaskStatusFailed, TaskStatusCannotStart, TaskStatusAborted, TaskStatusExpired:
 		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_FAILED
 	default:
 		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_UNSPECIFIED

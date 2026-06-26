@@ -30,6 +30,7 @@ message TaskAck {
     string task_id = 1;
     TaskStatus status = 2; // robot sends: CANNOT_START, STARTED, ABORTED, FAILED, FINISHED
     string error_message = 3; // populated on FAILED
+    bytes result = 4; // opaque result payload, populated on FINISHED
 }
 
 message Task {

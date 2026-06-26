@@ -3,22 +3,41 @@ package main
 import "errors"
 
 type Task struct {
-	ID      string
-	AgentID AgentID
-	Type    string // e.g. "GO_TO", "GO_HOME"
-	Payload []byte
-	Status  TaskStatus
-	Result  []byte
+	ID        string
+	AgentID   AgentID
+	Type      string // e.g. "GO_TO", "GO_HOME"
+	Payload   []byte
+	Status    TaskStatus
+	Result    []byte
+	MissionID MissionID
 }
 
-type TaskStatus string
+type TaskStatus int
 
 const (
-	TaskStatusPending   TaskStatus = "PENDING"
-	TaskStatusRunning   TaskStatus = "RUNNING"
-	TaskStatusCompleted TaskStatus = "COMPLETED"
-	TaskStatusFailed    TaskStatus = "FAILED"
+	TaskStatusUnspecified TaskStatus = iota // 0
+	TaskStatusDraft                         // 1
+	TaskStatusStarting                      // 2
+	TaskStatusCannotStart                   // 3
+	TaskStatusStarted                       // 4
+	TaskStatusExpiring                      // 5
+	TaskStatusExpired                       // 6
+	TaskStatusAborting                      // 7
+	TaskStatusAborted                       // 8
+	TaskStatusFailed                        // 9
+	TaskStatusFinishing                     // 10
+	TaskStatusFinished                      // 11
 )
+
+// Transient returns true if the task is in a transient state (not yet getting confirmation from the agent).
+func (t *Task) Transient() bool {
+	switch t.Status {
+	case TaskStatusUnspecified, TaskStatusDraft, TaskStatusStarting, TaskStatusExpiring, TaskStatusAborting, TaskStatusFinishing:
+		return true
+	default:
+		return false
+	}
+}
 
 type TaskSender interface {
 	IsOnline(id AgentID) bool

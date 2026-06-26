@@ -229,6 +229,7 @@ type TaskAck struct {
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	Status        TaskStatus             `protobuf:"varint,2,opt,name=status,proto3,enum=agent.v1.TaskStatus" json:"status,omitempty"`       // robot sends: CANNOT_START, STARTED, ABORTED, FAILED, FINISHED
 	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // populated on FAILED
+	Result        []byte                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`                                 // opaque result payload, populated on FINISHED
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -282,6 +283,13 @@ func (x *TaskAck) GetErrorMessage() string {
 		return x.ErrorMessage
 	}
 	return ""
+}
+
+func (x *TaskAck) GetResult() []byte {
+	if x != nil {
+		return x.Result
+	}
+	return nil
 }
 
 type Task struct {
@@ -531,11 +539,12 @@ const file_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\x05abort\x18\x02 \x01(\v2\x16.agent.v1.AbortCommandH\x00R\x05abortB\t\n" +
 	"\apayload\"'\n" +
 	"\fAbortCommand\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\"u\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\x8d\x01\n" +
 	"\aTaskAck\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12,\n" +
 	"\x06status\x18\x02 \x01(\x0e2\x14.agent.v1.TaskStatusR\x06status\x12#\n" +
-	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"\x81\x02\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\x12\x16\n" +
+	"\x06result\x18\x04 \x01(\fR\x06result\"\x81\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x18\n" +
