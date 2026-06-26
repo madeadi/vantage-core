@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vantageos-core/pkg/agentskill"
-	"vantageos-core/pkg/agentskill/slamtec/action"
+	agentskill "vantageos-core/pkg/agent_skill"
+	"vantageos-core/pkg/agent_skill/slamtec/action"
 )
 
 const (

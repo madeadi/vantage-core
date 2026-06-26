@@ -1,6 +1,6 @@
 package slamtec
 
-import "vantageos-core/pkg/agentskill/slamtec/action"
+import "vantageos-core/pkg/agent_skill/slamtec/action"
 
 // ── POJO / shared types ───────────────────────────────────────────────────────
 
@@ -161,8 +161,8 @@ func paramEmergencyStopOff() systemParameter {
 type jackStatusValue string
 
 const (
-	jackUp         jackStatusValue = "Up"
-	jackDown       jackStatusValue = "Down"
+	jackUp   jackStatusValue = "Up"
+	jackDown jackStatusValue = "Down"
 )
 
 type updateFloor struct {
