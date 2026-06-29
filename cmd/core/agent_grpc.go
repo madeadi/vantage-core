@@ -24,6 +24,7 @@ type agentGRPCServer struct {
 	telemetry *TelemetryListener
 	pose      LayoutPoseListener
 	layouts   []AgentLayoutConfig
+	lifecycle AgentLifecycleHook
 }
 
 func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksServer) error {
@@ -31,8 +32,14 @@ func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksSer
 	slog.Info("StreamTasks: agentsdk connected", "agent_id", agentID)
 
 	s.registry.attachStream(agentID, stream)
+	if s.lifecycle != nil {
+		s.lifecycle.OnAgentReconnect(agentID)
+	}
 	defer func() {
 		s.registry.detachStream(agentID)
+		if s.lifecycle != nil {
+			s.lifecycle.OnAgentDisconnect(agentID)
+		}
 		slog.Info("StreamTasks: agentsdk disconnected", "agent_id", agentID)
 	}()
 
