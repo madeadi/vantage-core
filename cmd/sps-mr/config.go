@@ -6,17 +6,25 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type RobotType string
+
+const (
+	RobotTypeSlamtec RobotType = "slamtec"
+	RobotTypeDummy   RobotType = "dummy"
+)
+
 type SlamtecConfig struct {
 	BaseUrl string `yaml:"base_url"`
 	Port    string `yaml:"port"`
 }
 
 type Config struct {
-	Url      string `yaml:"core_url"`
-	AgentID  string `yaml:"id"`
-	Key      string `yaml:"key"`
-	Name     string `yaml:"name"`
-	LayoutID string `yaml:"layout_id"`
+	Url       string    `yaml:"core_url"`
+	AgentID   string    `yaml:"id"`
+	Key       string    `yaml:"key"`
+	Name      string    `yaml:"name"`
+	LayoutID  string    `yaml:"layout_id"`
+	RobotType RobotType `yaml:"robot_type"`
 
 	Slamtec SlamtecConfig `yaml:"slamtec"`
 }

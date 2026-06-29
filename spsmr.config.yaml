@@ -4,6 +4,7 @@ name: SPS BOT 1
 core_url: http://localhost:8080
 grpc_addr: localhost:9090
 layout_id: layout1
+robot_type: slamtec
 
 slamtec:
   base_url: http://localhost
