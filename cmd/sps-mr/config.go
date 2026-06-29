@@ -6,12 +6,19 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type SlamtecConfig struct {
+	BaseUrl string `yaml:"base_url"`
+	Port    string `yaml:"port"`
+}
+
 type Config struct {
 	Url      string `yaml:"core_url"`
 	AgentID  string `yaml:"id"`
 	Key      string `yaml:"key"`
 	Name     string `yaml:"name"`
 	LayoutID string `yaml:"layout_id"`
+
+	Slamtec SlamtecConfig `yaml:"slamtec"`
 }
 
 func loadConfig(path string) (*Config, error) {
