@@ -16,6 +16,9 @@ service AgentService {
     rpc ReportTelemetry(stream TelemetryEvent) returns (TelemetryAck);
     // Agent streams the pose telemetry up to core
     rpc ReportPoseTelemetry(stream PoseTelemetryEvent) returns (PoseTelemetryAck);
+
+    // Agent get the affine transformation matrix from core
+    rpc GetTransformationMatrices(TransformationMatrixRequest) returns (TransformationMatrixResponse);
 }
 
 message ServerMessage {
@@ -97,4 +100,19 @@ message HeartbeatEvent {
 }
 message HeartbeatAck {
     google.protobuf.Timestamp sent_at = 1;
+}
+
+// Transformation Matrix
+message TransformationMatrixRequest {
+  string agent_id = 1;
+}
+
+message TransformationMatrixResponse {
+  repeated TransformationMatrix matrices = 1;
+}
+
+message TransformationMatrix {
+  string layout_id = 1;
+  repeated double matrix = 2; // 3x3 affine transformation matrix in row-major order (exactly 9 values)
+  double north_offset = 3;    // clockwise rotation in radians from robot north to layout north
 }

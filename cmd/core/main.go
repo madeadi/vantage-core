@@ -65,6 +65,7 @@ func main() {
 		return
 	}
 	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(authUnaryInterceptor(registry)),
 		grpc.StreamInterceptor(authStreamInterceptor(registry)),
 	)
 	telemetry := NewTelemetryListener()
@@ -72,6 +73,7 @@ func main() {
 		registry:  registry,
 		telemetry: telemetry,
 		pose:      registry,
+		layouts:   cfg.AgentLayouts,
 	})
 	go func() {
 		slog.Info("gRPC listening", "addr", grpcListenAddr)

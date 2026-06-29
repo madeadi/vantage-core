@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_StreamTasks_FullMethodName         = "/agent.v1.AgentService/StreamTasks"
-	AgentService_ReportTelemetry_FullMethodName     = "/agent.v1.AgentService/ReportTelemetry"
-	AgentService_ReportPoseTelemetry_FullMethodName = "/agent.v1.AgentService/ReportPoseTelemetry"
+	AgentService_StreamTasks_FullMethodName               = "/agent.v1.AgentService/StreamTasks"
+	AgentService_ReportTelemetry_FullMethodName           = "/agent.v1.AgentService/ReportTelemetry"
+	AgentService_ReportPoseTelemetry_FullMethodName       = "/agent.v1.AgentService/ReportPoseTelemetry"
+	AgentService_GetTransformationMatrices_FullMethodName = "/agent.v1.AgentService/GetTransformationMatrices"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -37,6 +38,8 @@ type AgentServiceClient interface {
 	ReportTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TelemetryEvent, TelemetryAck], error)
 	// Agent streams the pose telemetry up to core
 	ReportPoseTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PoseTelemetryEvent, PoseTelemetryAck], error)
+	// Agent get the affine transformation matrix from core
+	GetTransformationMatrices(ctx context.Context, in *TransformationMatrixRequest, opts ...grpc.CallOption) (*TransformationMatrixResponse, error)
 }
 
 type agentServiceClient struct {
@@ -86,6 +89,16 @@ func (c *agentServiceClient) ReportPoseTelemetry(ctx context.Context, opts ...gr
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ReportPoseTelemetryClient = grpc.ClientStreamingClient[PoseTelemetryEvent, PoseTelemetryAck]
 
+func (c *agentServiceClient) GetTransformationMatrices(ctx context.Context, in *TransformationMatrixRequest, opts ...grpc.CallOption) (*TransformationMatrixResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransformationMatrixResponse)
+	err := c.cc.Invoke(ctx, AgentService_GetTransformationMatrices_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -99,6 +112,8 @@ type AgentServiceServer interface {
 	ReportTelemetry(grpc.ClientStreamingServer[TelemetryEvent, TelemetryAck]) error
 	// Agent streams the pose telemetry up to core
 	ReportPoseTelemetry(grpc.ClientStreamingServer[PoseTelemetryEvent, PoseTelemetryAck]) error
+	// Agent get the affine transformation matrix from core
+	GetTransformationMatrices(context.Context, *TransformationMatrixRequest) (*TransformationMatrixResponse, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -117,6 +132,9 @@ func (UnimplementedAgentServiceServer) ReportTelemetry(grpc.ClientStreamingServe
 }
 func (UnimplementedAgentServiceServer) ReportPoseTelemetry(grpc.ClientStreamingServer[PoseTelemetryEvent, PoseTelemetryAck]) error {
 	return status.Errorf(codes.Unimplemented, "method ReportPoseTelemetry not implemented")
+}
+func (UnimplementedAgentServiceServer) GetTransformationMatrices(context.Context, *TransformationMatrixRequest) (*TransformationMatrixResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransformationMatrices not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -160,13 +178,36 @@ func _AgentService_ReportPoseTelemetry_Handler(srv interface{}, stream grpc.Serv
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ReportPoseTelemetryServer = grpc.ClientStreamingServer[PoseTelemetryEvent, PoseTelemetryAck]
 
+func _AgentService_GetTransformationMatrices_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransformationMatrixRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetTransformationMatrices(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_GetTransformationMatrices_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetTransformationMatrices(ctx, req.(*TransformationMatrixRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AgentService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "agent.v1.AgentService",
 	HandlerType: (*AgentServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetTransformationMatrices",
+			Handler:    _AgentService_GetTransformationMatrices_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StreamTasks",

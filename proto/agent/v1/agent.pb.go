@@ -739,6 +739,155 @@ func (x *HeartbeatAck) GetSentAt() *timestamppb.Timestamp {
 	return nil
 }
 
+// Transformation Matrix
+type TransformationMatrixRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransformationMatrixRequest) Reset() {
+	*x = TransformationMatrixRequest{}
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransformationMatrixRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransformationMatrixRequest) ProtoMessage() {}
+
+func (x *TransformationMatrixRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransformationMatrixRequest.ProtoReflect.Descriptor instead.
+func (*TransformationMatrixRequest) Descriptor() ([]byte, []int) {
+	return file_proto_agent_v1_agent_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TransformationMatrixRequest) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
+}
+
+type TransformationMatrixResponse struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Matrices      []*TransformationMatrix `protobuf:"bytes,1,rep,name=matrices,proto3" json:"matrices,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransformationMatrixResponse) Reset() {
+	*x = TransformationMatrixResponse{}
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransformationMatrixResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransformationMatrixResponse) ProtoMessage() {}
+
+func (x *TransformationMatrixResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransformationMatrixResponse.ProtoReflect.Descriptor instead.
+func (*TransformationMatrixResponse) Descriptor() ([]byte, []int) {
+	return file_proto_agent_v1_agent_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *TransformationMatrixResponse) GetMatrices() []*TransformationMatrix {
+	if x != nil {
+		return x.Matrices
+	}
+	return nil
+}
+
+type TransformationMatrix struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	LayoutId      string                 `protobuf:"bytes,1,opt,name=layout_id,json=layoutId,proto3" json:"layout_id,omitempty"`
+	Matrix        []float64              `protobuf:"fixed64,2,rep,packed,name=matrix,proto3" json:"matrix,omitempty"`                       // 3x3 affine transformation matrix in row-major order (exactly 9 values)
+	NorthOffset   float64                `protobuf:"fixed64,3,opt,name=north_offset,json=northOffset,proto3" json:"north_offset,omitempty"` // clockwise rotation in radians from robot north to layout north
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransformationMatrix) Reset() {
+	*x = TransformationMatrix{}
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransformationMatrix) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransformationMatrix) ProtoMessage() {}
+
+func (x *TransformationMatrix) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransformationMatrix.ProtoReflect.Descriptor instead.
+func (*TransformationMatrix) Descriptor() ([]byte, []int) {
+	return file_proto_agent_v1_agent_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *TransformationMatrix) GetLayoutId() string {
+	if x != nil {
+		return x.LayoutId
+	}
+	return ""
+}
+
+func (x *TransformationMatrix) GetMatrix() []float64 {
+	if x != nil {
+		return x.Matrix
+	}
+	return nil
+}
+
+func (x *TransformationMatrix) GetNorthOffset() float64 {
+	if x != nil {
+		return x.NorthOffset
+	}
+	return 0
+}
+
 var File_proto_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_v1_agent_proto_rawDesc = "" +
@@ -783,7 +932,15 @@ const file_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\x0eHeartbeatEvent\x123\n" +
 	"\asent_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt\"C\n" +
 	"\fHeartbeatAck\x123\n" +
-	"\asent_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt*\xc4\x02\n" +
+	"\asent_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt\"8\n" +
+	"\x1bTransformationMatrixRequest\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\"Z\n" +
+	"\x1cTransformationMatrixResponse\x12:\n" +
+	"\bmatrices\x18\x01 \x03(\v2\x1e.agent.v1.TransformationMatrixR\bmatrices\"n\n" +
+	"\x14TransformationMatrix\x12\x1b\n" +
+	"\tlayout_id\x18\x01 \x01(\tR\blayoutId\x12\x16\n" +
+	"\x06matrix\x18\x02 \x03(\x01R\x06matrix\x12!\n" +
+	"\fnorth_offset\x18\x03 \x01(\x01R\vnorthOffset*\xc4\x02\n" +
 	"\n" +
 	"TaskStatus\x12\x1b\n" +
 	"\x17TASK_STATUS_UNSPECIFIED\x10\x00\x12\x15\n" +
@@ -798,11 +955,12 @@ const file_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\x12TASK_STATUS_FAILED\x10\t\x12\x19\n" +
 	"\x15TASK_STATUS_FINISHING\x10\n" +
 	"\x12\x18\n" +
-	"\x14TASK_STATUS_FINISHED\x10\v2\xe7\x01\n" +
+	"\x14TASK_STATUS_FINISHED\x10\v2\xd3\x02\n" +
 	"\fAgentService\x12=\n" +
 	"\vStreamTasks\x12\x11.agent.v1.TaskAck\x1a\x17.agent.v1.ServerMessage(\x010\x01\x12E\n" +
 	"\x0fReportTelemetry\x12\x18.agent.v1.TelemetryEvent\x1a\x16.agent.v1.TelemetryAck(\x01\x12Q\n" +
-	"\x13ReportPoseTelemetry\x12\x1c.agent.v1.PoseTelemetryEvent\x1a\x1a.agent.v1.PoseTelemetryAck(\x01B*Z(vantageos-core/proto/agentsdk/v1;agentv1b\x06proto3"
+	"\x13ReportPoseTelemetry\x12\x1c.agent.v1.PoseTelemetryEvent\x1a\x1a.agent.v1.PoseTelemetryAck(\x01\x12j\n" +
+	"\x19GetTransformationMatrices\x12%.agent.v1.TransformationMatrixRequest\x1a&.agent.v1.TransformationMatrixResponseB*Z(vantageos-core/proto/agentsdk/v1;agentv1b\x06proto3"
 
 var (
 	file_proto_agent_v1_agent_proto_rawDescOnce sync.Once
@@ -817,43 +975,49 @@ func file_proto_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_proto_agent_v1_agent_proto_goTypes = []any{
-	(TaskStatus)(0),               // 0: agent.v1.TaskStatus
-	(*ServerMessage)(nil),         // 1: agent.v1.ServerMessage
-	(*AbortCommand)(nil),          // 2: agent.v1.AbortCommand
-	(*TaskAck)(nil),               // 3: agent.v1.TaskAck
-	(*Task)(nil),                  // 4: agent.v1.Task
-	(*AgentContext)(nil),          // 5: agent.v1.AgentContext
-	(*TelemetryEvent)(nil),        // 6: agent.v1.TelemetryEvent
-	(*TelemetryAck)(nil),          // 7: agent.v1.TelemetryAck
-	(*PoseTelemetryEvent)(nil),    // 8: agent.v1.PoseTelemetryEvent
-	(*PoseTelemetryAck)(nil),      // 9: agent.v1.PoseTelemetryAck
-	(*HeartbeatEvent)(nil),        // 10: agent.v1.HeartbeatEvent
-	(*HeartbeatAck)(nil),          // 11: agent.v1.HeartbeatAck
-	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
+	(TaskStatus)(0),                      // 0: agent.v1.TaskStatus
+	(*ServerMessage)(nil),                // 1: agent.v1.ServerMessage
+	(*AbortCommand)(nil),                 // 2: agent.v1.AbortCommand
+	(*TaskAck)(nil),                      // 3: agent.v1.TaskAck
+	(*Task)(nil),                         // 4: agent.v1.Task
+	(*AgentContext)(nil),                 // 5: agent.v1.AgentContext
+	(*TelemetryEvent)(nil),               // 6: agent.v1.TelemetryEvent
+	(*TelemetryAck)(nil),                 // 7: agent.v1.TelemetryAck
+	(*PoseTelemetryEvent)(nil),           // 8: agent.v1.PoseTelemetryEvent
+	(*PoseTelemetryAck)(nil),             // 9: agent.v1.PoseTelemetryAck
+	(*HeartbeatEvent)(nil),               // 10: agent.v1.HeartbeatEvent
+	(*HeartbeatAck)(nil),                 // 11: agent.v1.HeartbeatAck
+	(*TransformationMatrixRequest)(nil),  // 12: agent.v1.TransformationMatrixRequest
+	(*TransformationMatrixResponse)(nil), // 13: agent.v1.TransformationMatrixResponse
+	(*TransformationMatrix)(nil),         // 14: agent.v1.TransformationMatrix
+	(*timestamppb.Timestamp)(nil),        // 15: google.protobuf.Timestamp
 }
 var file_proto_agent_v1_agent_proto_depIdxs = []int32{
 	4,  // 0: agent.v1.ServerMessage.task:type_name -> agent.v1.Task
 	2,  // 1: agent.v1.ServerMessage.abort:type_name -> agent.v1.AbortCommand
 	0,  // 2: agent.v1.TaskAck.status:type_name -> agent.v1.TaskStatus
-	12, // 3: agent.v1.Task.to_expire_at:type_name -> google.protobuf.Timestamp
-	12, // 4: agent.v1.Task.to_finalise_at:type_name -> google.protobuf.Timestamp
+	15, // 3: agent.v1.Task.to_expire_at:type_name -> google.protobuf.Timestamp
+	15, // 4: agent.v1.Task.to_finalise_at:type_name -> google.protobuf.Timestamp
 	5,  // 5: agent.v1.Task.agent_context:type_name -> agent.v1.AgentContext
-	12, // 6: agent.v1.PoseTelemetryEvent.timestamp:type_name -> google.protobuf.Timestamp
-	12, // 7: agent.v1.HeartbeatEvent.sent_at:type_name -> google.protobuf.Timestamp
-	12, // 8: agent.v1.HeartbeatAck.sent_at:type_name -> google.protobuf.Timestamp
-	3,  // 9: agent.v1.AgentService.StreamTasks:input_type -> agent.v1.TaskAck
-	6,  // 10: agent.v1.AgentService.ReportTelemetry:input_type -> agent.v1.TelemetryEvent
-	8,  // 11: agent.v1.AgentService.ReportPoseTelemetry:input_type -> agent.v1.PoseTelemetryEvent
-	1,  // 12: agent.v1.AgentService.StreamTasks:output_type -> agent.v1.ServerMessage
-	7,  // 13: agent.v1.AgentService.ReportTelemetry:output_type -> agent.v1.TelemetryAck
-	9,  // 14: agent.v1.AgentService.ReportPoseTelemetry:output_type -> agent.v1.PoseTelemetryAck
-	12, // [12:15] is the sub-list for method output_type
-	9,  // [9:12] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	15, // 6: agent.v1.PoseTelemetryEvent.timestamp:type_name -> google.protobuf.Timestamp
+	15, // 7: agent.v1.HeartbeatEvent.sent_at:type_name -> google.protobuf.Timestamp
+	15, // 8: agent.v1.HeartbeatAck.sent_at:type_name -> google.protobuf.Timestamp
+	14, // 9: agent.v1.TransformationMatrixResponse.matrices:type_name -> agent.v1.TransformationMatrix
+	3,  // 10: agent.v1.AgentService.StreamTasks:input_type -> agent.v1.TaskAck
+	6,  // 11: agent.v1.AgentService.ReportTelemetry:input_type -> agent.v1.TelemetryEvent
+	8,  // 12: agent.v1.AgentService.ReportPoseTelemetry:input_type -> agent.v1.PoseTelemetryEvent
+	12, // 13: agent.v1.AgentService.GetTransformationMatrices:input_type -> agent.v1.TransformationMatrixRequest
+	1,  // 14: agent.v1.AgentService.StreamTasks:output_type -> agent.v1.ServerMessage
+	7,  // 15: agent.v1.AgentService.ReportTelemetry:output_type -> agent.v1.TelemetryAck
+	9,  // 16: agent.v1.AgentService.ReportPoseTelemetry:output_type -> agent.v1.PoseTelemetryAck
+	13, // 17: agent.v1.AgentService.GetTransformationMatrices:output_type -> agent.v1.TransformationMatrixResponse
+	14, // [14:18] is the sub-list for method output_type
+	10, // [10:14] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_v1_agent_proto_init() }
@@ -871,7 +1035,7 @@ func file_proto_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_v1_agent_proto_rawDesc), len(file_proto_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -23,6 +23,7 @@ type agentGRPCServer struct {
 	registry  *AgentRegistry
 	telemetry *TelemetryListener
 	pose      LayoutPoseListener
+	layouts   []AgentLayoutConfig
 }
 
 func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksServer) error {
@@ -83,33 +84,73 @@ func (s *agentGRPCServer) ReportPoseTelemetry(stream agentv1.AgentService_Report
 	}
 }
 
+func (s *agentGRPCServer) GetTransformationMatrices(ctx context.Context, req *agentv1.TransformationMatrixRequest) (*agentv1.TransformationMatrixResponse, error) {
+	agentID := AgentID(req.AgentId)
+	if agentID == "" {
+		agentID = agentIDFromContext(ctx)
+	}
+
+	var matrices []*agentv1.TransformationMatrix
+	for _, l := range s.layouts {
+		if l.AgentID != agentID {
+			continue
+		}
+		flat := make([]float64, 0, 9)
+		for _, row := range l.TransformationMatrix {
+			flat = append(flat, row...)
+		}
+		matrices = append(matrices, &agentv1.TransformationMatrix{
+			LayoutId:    l.LayoutID,
+			Matrix:      flat,
+			NorthOffset: l.NorthOffset,
+		})
+	}
+	return &agentv1.TransformationMatrixResponse{Matrices: matrices}, nil
+}
+
+func authenticateMetadata(registry *AgentRegistry, ctx context.Context) error {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "missing metadata")
+	}
+
+	authVals := md.Get("authorization")
+	if len(authVals) == 0 {
+		return status.Error(codes.Unauthenticated, "missing authorization header")
+	}
+	token, ok := strings.CutPrefix(authVals[0], "Bearer ")
+	if !ok || token == "" {
+		return status.Error(codes.Unauthenticated, "invalid authorization format")
+	}
+
+	agentIDVals := md.Get("agent_id")
+	if len(agentIDVals) == 0 {
+		return status.Error(codes.Unauthenticated, "missing agent_id")
+	}
+	agentID := AgentID(agentIDVals[0])
+
+	if !registry.Authenticate(agentID, token) {
+		return status.Error(codes.Unauthenticated, "invalid token")
+	}
+	return nil
+}
+
+// authUnaryInterceptor validates the bearer token from gRPC metadata on every unary call.
+func authUnaryInterceptor(registry *AgentRegistry) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if err := authenticateMetadata(registry, ctx); err != nil {
+			return nil, err
+		}
+		return handler(ctx, req)
+	}
+}
+
 // authStreamInterceptor validates the bearer token from gRPC metadata on every stream open.
 func authStreamInterceptor(registry *AgentRegistry) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		md, ok := metadata.FromIncomingContext(ss.Context())
-		if !ok {
-			return status.Error(codes.Unauthenticated, "missing metadata")
+		if err := authenticateMetadata(registry, ss.Context()); err != nil {
+			return err
 		}
-
-		authVals := md.Get("authorization")
-		if len(authVals) == 0 {
-			return status.Error(codes.Unauthenticated, "missing authorization header")
-		}
-		token, ok := strings.CutPrefix(authVals[0], "Bearer ")
-		if !ok || token == "" {
-			return status.Error(codes.Unauthenticated, "invalid authorization format")
-		}
-
-		agentIDVals := md.Get("agent_id")
-		if len(agentIDVals) == 0 {
-			return status.Error(codes.Unauthenticated, "missing agent_id")
-		}
-		agentID := AgentID(agentIDVals[0])
-
-		if !registry.Authenticate(agentID, token) {
-			return status.Error(codes.Unauthenticated, "invalid token")
-		}
-
 		return handler(srv, ss)
 	}
 }

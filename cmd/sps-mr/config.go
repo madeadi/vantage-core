@@ -22,7 +22,6 @@ type Config struct {
 	Url       string    `yaml:"core_url"`
 	AgentID   string    `yaml:"id"`
 	Key       string    `yaml:"key"`
-	Name      string    `yaml:"name"`
 	LayoutID  string    `yaml:"layout_id"`
 	RobotType RobotType `yaml:"robot_type"`
 

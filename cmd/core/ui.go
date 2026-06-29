@@ -86,7 +86,7 @@ func buildStatsFragment(s RegistryStats) string {
 	if len(s.Agents) == 0 {
 		b.WriteString(`<p class="empty">No agents connected</p>`)
 	} else {
-		b.WriteString(`<ul class="agentsdk-list">`)
+		b.WriteString(`<ul class="agent-list">`)
 		for _, a := range s.Agents {
 			pose := a.Pose
 			var poseStr string
@@ -99,7 +99,7 @@ func buildStatsFragment(s RegistryStats) string {
 				)
 			}
 			fmt.Fprintf(&b,
-				`<li class="agentsdk-item"><span class="dot"></span><span class="agentsdk-name">%s</span><span class="agentsdk-id">%s</span>%s</li>`,
+				`<li class="agent-item"><span class="dot"></span><span class="agent-name">%s</span><span class="agent-id">%s</span>%s</li>`,
 				html.EscapeString(a.Name), html.EscapeString(string(a.ID)), poseStr,
 			)
 		}
