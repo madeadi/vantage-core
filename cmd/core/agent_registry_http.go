@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -10,8 +8,6 @@ import (
 )
 
 type registerRequest struct {
-	ID           AgentID       `json:"id"`
-	Name         string        `json:"name"`
 	Skills       []AgentSkill  `json:"skills"`
 	EventSources []EventSource `json:"event_sources"`
 }
@@ -48,24 +44,11 @@ func (r *AgentRegistry) handleRegister(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	if body.ID == "" || body.Name == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-
-	// device key must match the agentsdk ID in the body
-	if body.ID != agentID {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	token, err := generateToken()
+	token, err := r.Register(agentID, body.Skills)
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
-
-	r.Register(&Agent{ID: body.ID, Name: body.Name}, token, body.Skills)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(agentsdk.RegisterResponse{
@@ -95,12 +78,4 @@ func (r *AgentRegistry) getAgentIDByKey(key string) (AgentID, bool) {
 		}
 	}
 	return "", false
-}
-
-func generateToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }

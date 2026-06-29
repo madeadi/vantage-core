@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"sync"
@@ -20,20 +22,33 @@ type agentStream struct {
 	mu     sync.Mutex
 }
 
+type TaskRepo interface {
+	SaveTask(task *Task) error
+	GetActiveTasksByAgent(agentID AgentID) []*Task
+	ListTasks(agentID AgentID) []*Task
+	GetTaskByID(taskID string) (*Task, error)
+}
+
 type AgentRegistry struct {
 	mu                sync.RWMutex
 	tokens            map[AgentID]string
+	allowedAgents     []AllowedAgent // pre-shared key → agentID, issued per device at provisioning
 	onlineAgents      map[AgentID]*Agent
 	streams           map[AgentID]*agentStream
 	skills            map[AgentID][]AgentSkill
-	allowedAgents     []AllowedAgent // pre-shared key → agentID, issued per device at provisioning
 	grpcAdvertiseAddr string
 
 	poseListener *PoseListener
 	stop         func() // cancels the poseListener background goroutine
+
+	taskRepo TaskRepo
 }
 
-func NewAgentRegistry(allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *AgentRegistry {
+func NewAgentRegistry(
+	allowedAgents []AllowedAgent,
+	grpcAdvertiseAddr string,
+	taskRepo TaskRepo,
+) *AgentRegistry {
 	slog.Info("NewAgentRegistry")
 	for _, allowedAgent := range allowedAgents {
 		slog.Info("Agent", "agentID", allowedAgent.AgentID, "name", allowedAgent.Name)
@@ -53,6 +68,7 @@ func NewAgentRegistry(allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *A
 		grpcAdvertiseAddr: grpcAdvertiseAddr,
 		poseListener:      poseListener,
 		stop:              cancelPose,
+		taskRepo:          taskRepo,
 	}
 }
 
@@ -78,41 +94,24 @@ func (r *AgentRegistry) Authenticate(agentID AgentID, token string) bool {
 	return t == token
 }
 
-func (r *AgentRegistry) Register(agent *Agent, token string, skills []AgentSkill) {
-	slog.Info("Registering Agent", "agentsdk", agent.ID, "skills", len(skills))
+func (r *AgentRegistry) Register(agentID AgentID, skills []AgentSkill) (string, error) {
+	slog.Info("Registering Agent", "agentsdk", agentID, "skills", len(skills))
 	for _, skill := range skills {
-		slog.Info("Agent Skill", "skill_name", skill.Name, "agentsdk", agent.ID)
+		slog.Info("Agent Skill", "skill_name", skill.Name, "agent_id", agentID)
+	}
+
+	token, err := generateRandomHex(32)
+	if err != nil {
+		slog.Error("Failed to generate token", "err", err)
+		return "", err
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.tokens[agent.ID] = token
-	r.skills[agent.ID] = skills
-}
+	r.tokens[agentID] = token
+	r.skills[agentID] = skills
 
-func (r *AgentRegistry) Unregister(agentID AgentID) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.onlineAgents, agentID)
-}
-
-func (r *AgentRegistry) AddSkill(agentID AgentID, skill AgentSkill) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if !r.isOnlineLocked(agentID) {
-		return errors.New("Agent not found")
-	}
-	if !r.verifySkillPayload(skill) {
-		return errors.New("Invalid skill payload")
-	}
-	for i, s := range r.skills[agentID] {
-		if s.Name == skill.Name {
-			r.skills[agentID][i] = skill
-			return nil
-		}
-	}
-	r.skills[agentID] = append(r.skills[agentID], skill)
-	return nil
+	return token, nil
 }
 
 func (r *AgentRegistry) IsOnline(agentID AgentID) bool {
@@ -169,7 +168,20 @@ func (r *AgentRegistry) SendTask(task *Task) error {
 	}
 	as.mu.Lock()
 	defer as.mu.Unlock()
-	return as.stream.Send(msg)
+	if active := r.taskRepo.GetActiveTasksByAgent(task.AgentID); len(active) > 0 {
+		return errors.New("agent is busy")
+	}
+	if err := r.taskRepo.SaveTask(task); err != nil {
+		slog.Error("Failed to save task to task repository", "err", err)
+		return err
+	}
+
+	if err := as.stream.Send(msg); err != nil {
+		slog.Error("Failed to send task to agent", "err", err)
+		return err
+	}
+
+	return nil
 }
 
 func (r *AgentRegistry) verifySkillPayload(skill AgentSkill) bool {
@@ -191,6 +203,32 @@ func (r *AgentRegistry) OnPoseUpdate(agentID AgentID, event *agentv1.PoseTelemet
 	r.poseListener.OnPoseUpdate(agentID, event)
 }
 
+func (r *AgentRegistry) ListTasks(agentID AgentID) []*Task {
+	return r.taskRepo.ListTasks(agentID)
+}
+
 func (r *AgentRegistry) Close() {
 	r.stop()
+}
+
+func generateRandomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func (r *AgentRegistry) OnReconnect(agentID AgentID) {
+	activeTasks := r.taskRepo.GetActiveTasksByAgent(agentID)
+	if len(activeTasks) == 0 {
+		return
+	}
+
+	err := r.SendTask(activeTasks[0]) // send the first active task to the agent
+	slog.Info("Reconnected agent", "agentID", agentID, "taskID", activeTasks[0].ID)
+	if err != nil {
+		slog.Error("Failed to send active task to agent", "err", err)
+		return
+	}
 }

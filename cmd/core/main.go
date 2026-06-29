@@ -47,10 +47,11 @@ func main() {
 		grpcAdvertiseAddr = "localhost:9090"
 	}
 
-	registry := NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
+	tRepo := NewTaskRepoMemory()
+	registry := NewAgentRegistry(allowedAgents, grpcAdvertiseAddr, tRepo)
 	defer registry.Close()
-	tm := &TaskManager{sender: registry, currentTasks: make(map[AgentID]*Task)}
-	taskHTTP := &TaskHTTP{tm: tm}
+
+	taskHTTP := NewTaskHTTP(registry)
 
 	mux := http.NewServeMux()
 	registry.RegisterRoutes(mux)
@@ -69,11 +70,14 @@ func main() {
 		grpc.StreamInterceptor(authStreamInterceptor(registry)),
 	)
 	telemetry := NewTelemetryListener()
+	tuHandler := NewTaskUpdatedHandlerMemory(tRepo)
 	agentv1.RegisterAgentServiceServer(grpcServer, &agentGRPCServer{
-		registry:  registry,
-		telemetry: telemetry,
-		pose:      registry,
-		layouts:   cfg.AgentLayouts,
+		registry:    registry,
+		telemetry:   telemetry,
+		pose:        registry,
+		layouts:     cfg.AgentLayouts,
+		tuHandler:   tuHandler,
+		reconnector: registry,
 	})
 	go func() {
 		slog.Info("gRPC listening", "addr", grpcListenAddr)

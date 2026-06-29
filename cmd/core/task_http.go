@@ -1,14 +1,17 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
 type TaskHTTP struct {
-	tm *TaskManager
+	ar *AgentRegistry
+}
+
+func NewTaskHTTP(ar *AgentRegistry) *TaskHTTP {
+	return &TaskHTTP{ar: ar}
 }
 
 type createTaskRequest struct {
@@ -23,6 +26,7 @@ type createTaskResponse struct {
 
 func (h *TaskHTTP) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/tasks", h.handleCreateTask)
+	mux.HandleFunc("GET /api/v1/tasks", h.handleListTasks)
 }
 
 // handleCreateTask dispatches a task to an online agentsdk.
@@ -63,7 +67,8 @@ func (h *TaskHTTP) handleCreateTask(w http.ResponseWriter, req *http.Request) {
 		Status:  TaskStatusDraft,
 	}
 
-	if err := h.tm.StartTask(task); err != nil {
+	if err := h.ar.SendTask(task); err != nil {
+		slog.Error("Failed to send task to agent", "err", err)
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
@@ -72,10 +77,65 @@ func (h *TaskHTTP) handleCreateTask(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(createTaskResponse{TaskID: taskID})
 }
 
-func generateTaskID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+type taskResponse struct {
+	ID        string     `json:"id"`
+	AgentID   string     `json:"agent_id"`
+	Type      string     `json:"type"`
+	Status    TaskStatus `json:"status"`
+	Payload   []byte     `json:"payload,omitempty"`
+	Result    []byte     `json:"result,omitempty"`
+	MissionID MissionID  `json:"mission_id,omitempty"`
+
+	ReceivedAt string `json:"received_at,omitempty"`
+	StartAt    string `json:"start_at,omitempty"`
+	ToExpireAt string `json:"to_expire_at,omitempty"`
+}
+
+type listTasksResponse struct {
+	Tasks []*taskResponse `json:"tasks"`
+}
+
+// handleListTasks returns tasks, optionally filtered by agent_id query param.
+//
+// @Summary     List tasks
+// @Description Returns all tasks, optionally filtered by agent. Pass ?agent_id=<id> to filter.
+// @Tags        tasks
+// @Produce     json
+// @Param       agent_id  query     string  false  "Filter by agent ID"
+// @Success     200       {object}  listTasksResponse
+// @Router      /api/v1/tasks [get]
+func (h *TaskHTTP) handleListTasks(w http.ResponseWriter, req *http.Request) {
+	agentID := AgentID(req.URL.Query().Get("agent_id"))
+
+	tasks := h.ar.ListTasks(agentID)
+
+	resp := listTasksResponse{Tasks: make([]*taskResponse, 0, len(tasks))}
+	for _, t := range tasks {
+		tr := &taskResponse{
+			ID:        t.ID,
+			AgentID:   string(t.AgentID),
+			Type:      t.Type,
+			Status:    t.Status,
+			Payload:   t.Payload,
+			Result:    t.Result,
+			MissionID: t.MissionID,
+		}
+		if !t.ReceivedAt.IsZero() {
+			tr.ReceivedAt = t.ReceivedAt.UTC().Format("2006-01-02T15:04:05Z")
+		}
+		if !t.StartAt.IsZero() {
+			tr.StartAt = t.StartAt.UTC().Format("2006-01-02T15:04:05Z")
+		}
+		if !t.ToExpireAt.IsZero() {
+			tr.ToExpireAt = t.ToExpireAt.UTC().Format("2006-01-02T15:04:05Z")
+		}
+		resp.Tasks = append(resp.Tasks, tr)
 	}
-	return hex.EncodeToString(b), nil
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func generateTaskID() (string, error) {
+	return generateRandomHex(16)
 }

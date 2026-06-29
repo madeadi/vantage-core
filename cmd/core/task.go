@@ -1,8 +1,7 @@
 package main
 
 import (
-	"errors"
-	"sync"
+	"time"
 )
 
 type Task struct {
@@ -13,6 +12,10 @@ type Task struct {
 	Status    TaskStatus
 	Result    []byte
 	MissionID MissionID
+
+	ReceivedAt time.Time
+	StartAt    time.Time
+	ToExpireAt time.Time
 }
 
 type TaskStatus int
@@ -42,28 +45,12 @@ func (t *Task) Transient() bool {
 	}
 }
 
-type TaskSender interface {
-	IsOnline(id AgentID) bool
-	SendTask(task *Task) error
+func (t *Task) Final() bool {
+	return t.Status == TaskStatusAborted || t.Status == TaskStatusFailed || t.Status == TaskStatusFinished
 }
 
-type TaskManager struct {
-	mu           sync.Mutex
-	sender       TaskSender
-	currentTasks map[AgentID]*Task
-}
-
-// StartTask dispatches a task to the agentsdk via its live gRPC stream.
-// Returns an error if the agentsdk is offline or already has a running task.
-func (t *TaskManager) StartTask(task *Task) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if !t.sender.IsOnline(task.AgentID) {
-		return errors.New("cannot start task: agentsdk is offline")
-	}
-	if _, ok := t.currentTasks[task.AgentID]; ok {
-		return errors.New("cannot start task: agentsdk is busy")
-	}
-	t.currentTasks[task.AgentID] = task
-	return t.sender.SendTask(task)
+func (t *Task) CopyMetadata(tn *Task) {
+	tn.ReceivedAt = t.ReceivedAt
+	tn.StartAt = t.StartAt
+	tn.ToExpireAt = t.ToExpireAt
 }

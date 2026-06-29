@@ -18,12 +18,22 @@ type LayoutPoseListener interface {
 	OnPoseUpdate(agentID AgentID, pose *agentv1.PoseTelemetryEvent)
 }
 
+type TaskUpdatedHandler interface {
+	OnTaskUpdated(ack *agentv1.TaskAck)
+}
+
+type Reconnector interface {
+	OnReconnect(agentID AgentID)
+}
+
 type agentGRPCServer struct {
 	agentv1.UnimplementedAgentServiceServer
-	registry  *AgentRegistry
-	telemetry *TelemetryListener
-	pose      LayoutPoseListener
-	layouts   []AgentLayoutConfig
+	registry    *AgentRegistry
+	telemetry   *TelemetryListener
+	pose        LayoutPoseListener
+	layouts     []AgentLayoutConfig
+	reconnector Reconnector // handle reconnects from agent
+	tuHandler   TaskUpdatedHandler
 }
 
 func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksServer) error {
@@ -31,6 +41,9 @@ func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksSer
 	slog.Info("StreamTasks: agentsdk connected", "agent_id", agentID)
 
 	s.registry.attachStream(agentID, stream)
+
+	s.reconnector.OnReconnect(agentID)
+
 	defer func() {
 		s.registry.detachStream(agentID)
 		slog.Info("StreamTasks: agentsdk disconnected", "agent_id", agentID)
@@ -46,6 +59,7 @@ func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksSer
 			return err
 		}
 		slog.Info("task ack received", "agent_id", agentID, "task_id", ack.TaskId, "status", ack.Status)
+		s.tuHandler.OnTaskUpdated(ack)
 	}
 }
 

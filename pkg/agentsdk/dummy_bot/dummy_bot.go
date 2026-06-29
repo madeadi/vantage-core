@@ -15,7 +15,7 @@ type DummyBot struct {
 func New() *DummyBot {
 	skillChan := make(chan agentskill2.Result, 1)
 	return &DummyBot{
-		skillDuration: 3 * time.Second,
+		skillDuration: 10 * time.Second,
 		skillChan:     skillChan,
 	}
 }
