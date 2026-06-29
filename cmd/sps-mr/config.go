@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	Url     string `yaml:"core_url"`
-	AgentID string `yaml:"id"`
-	Key     string `yaml:"key"`
-	Name    string `yaml:"name"`
+	Url      string `yaml:"core_url"`
+	AgentID  string `yaml:"id"`
+	Key      string `yaml:"key"`
+	Name     string `yaml:"name"`
+	LayoutID string `yaml:"layout_id"`
 }
 
 func loadConfig(path string) (*Config, error) {

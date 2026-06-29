@@ -4,8 +4,40 @@ agents:
   - id: smallbot
     key: dev-key-abc123
     name: Small Bot
+  - id: spsbot1
+    key: sps-bot-1
+    name: SPS MR 1
 
 missions:
   - id: sps
     name: SPS Food Delivery
     key: sps-key
+
+layouts:
+  - id: layout1
+    name: Layout 1
+    coordinate_system: pixel
+  - id: layout
+    name: Layout 2
+    coordinate_system: latlon
+
+layout_agents:
+  - layout_id: layout1
+    agent_id: smallbot
+    calibration_points:
+      - north_offset: 0
+      - name: point 1
+        layout_x: 0
+        layout_y: 0
+        agent_x: 0
+        agent_y: 0
+      - name: point 2
+        layout_x: 1
+        layout_y: 1
+        agent_x: 1
+        agent_y: 1
+      - name: point 3
+        layout_x: 2
+        layout_y: 2
+        agent_x: 2
+        agent_y: 2

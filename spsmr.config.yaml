@@ -1,5 +1,6 @@
-id: smallbot
-key: dev-key-abc123
-name: Small Bot
+id: spsbot1
+key: sps-bot-1
+name: SPS BOT 1
 core_url: http://localhost:8080
 grpc_addr: localhost:9090
+layout_id: layout1

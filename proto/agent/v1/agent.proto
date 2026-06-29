@@ -8,11 +8,14 @@ option go_package = "vantageos-core/proto/agent/v1;agentv1";
 
 // AgentService is the gRPC contract between core and agents.
 service AgentService {
-    // Core streams tasks down to the agent.
+    // Core streams tasks down to the agent. It will also tell the core that
+    // agent is alive or not.
     rpc StreamTasks(stream TaskAck) returns (stream ServerMessage);
 
     // Agent streams telemetry up to core.
     rpc ReportTelemetry(stream TelemetryEvent) returns (TelemetryAck);
+    // Agent streams the pose telemetry up to core
+    rpc ReportPoseTelemetry(stream PoseTelemetryEvent) returns (PoseTelemetryAck);
 }
 
 message ServerMessage {
@@ -75,3 +78,23 @@ message TelemetryEvent {
 }
 
 message TelemetryAck {}
+
+// Pose Telemetry
+message PoseTelemetryEvent {
+    string agent_id = 1;
+    string layout_id = 2;
+    double x = 3;
+    double y = 4;
+    double yaw = 5;
+    google.protobuf.Timestamp timestamp = 6;
+}
+
+message PoseTelemetryAck {}
+
+// Heartbeat
+message HeartbeatEvent {
+    google.protobuf.Timestamp sent_at = 1;
+}
+message HeartbeatAck {
+    google.protobuf.Timestamp sent_at = 1;
+}

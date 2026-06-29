@@ -5,12 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"vantageos-core/pkg/agent/server"
-	agentskill "vantageos-core/pkg/agent_skill"
+	dummybot "vantageos-core/pkg/agent_skill/dummy_bot"
 )
-
-type Robot interface {
-	agentskill.RobotPoseSkill
-}
 
 func main() {
 
@@ -28,10 +24,8 @@ func main() {
 		CoreURL: cfg.Url,
 	}
 
-	app := &App{
-		Config: *cfg,
-		Server: *server,
-	}
+	robot := dummybot.New()
+	app := NewApp(robot, *cfg, *server)
 
 	fmt.Println(app)
 

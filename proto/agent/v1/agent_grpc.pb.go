@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentService_StreamTasks_FullMethodName     = "/agent.v1.AgentService/StreamTasks"
-	AgentService_ReportTelemetry_FullMethodName = "/agent.v1.AgentService/ReportTelemetry"
+	AgentService_StreamTasks_FullMethodName         = "/agent.v1.AgentService/StreamTasks"
+	AgentService_ReportTelemetry_FullMethodName     = "/agent.v1.AgentService/ReportTelemetry"
+	AgentService_ReportPoseTelemetry_FullMethodName = "/agent.v1.AgentService/ReportPoseTelemetry"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -29,10 +30,13 @@ const (
 //
 // AgentService is the gRPC contract between core and agents.
 type AgentServiceClient interface {
-	// Core streams tasks down to the agent.
+	// Core streams tasks down to the agent. It will also tell the core that
+	// agent is alive or not.
 	StreamTasks(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TaskAck, ServerMessage], error)
 	// Agent streams telemetry up to core.
 	ReportTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[TelemetryEvent, TelemetryAck], error)
+	// Agent streams the pose telemetry up to core
+	ReportPoseTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PoseTelemetryEvent, PoseTelemetryAck], error)
 }
 
 type agentServiceClient struct {
@@ -69,16 +73,32 @@ func (c *agentServiceClient) ReportTelemetry(ctx context.Context, opts ...grpc.C
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ReportTelemetryClient = grpc.ClientStreamingClient[TelemetryEvent, TelemetryAck]
 
+func (c *agentServiceClient) ReportPoseTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PoseTelemetryEvent, PoseTelemetryAck], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentService_ServiceDesc.Streams[2], AgentService_ReportPoseTelemetry_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[PoseTelemetryEvent, PoseTelemetryAck]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ReportPoseTelemetryClient = grpc.ClientStreamingClient[PoseTelemetryEvent, PoseTelemetryAck]
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
 //
 // AgentService is the gRPC contract between core and agents.
 type AgentServiceServer interface {
-	// Core streams tasks down to the agent.
+	// Core streams tasks down to the agent. It will also tell the core that
+	// agent is alive or not.
 	StreamTasks(grpc.BidiStreamingServer[TaskAck, ServerMessage]) error
 	// Agent streams telemetry up to core.
 	ReportTelemetry(grpc.ClientStreamingServer[TelemetryEvent, TelemetryAck]) error
+	// Agent streams the pose telemetry up to core
+	ReportPoseTelemetry(grpc.ClientStreamingServer[PoseTelemetryEvent, PoseTelemetryAck]) error
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -94,6 +114,9 @@ func (UnimplementedAgentServiceServer) StreamTasks(grpc.BidiStreamingServer[Task
 }
 func (UnimplementedAgentServiceServer) ReportTelemetry(grpc.ClientStreamingServer[TelemetryEvent, TelemetryAck]) error {
 	return status.Errorf(codes.Unimplemented, "method ReportTelemetry not implemented")
+}
+func (UnimplementedAgentServiceServer) ReportPoseTelemetry(grpc.ClientStreamingServer[PoseTelemetryEvent, PoseTelemetryAck]) error {
+	return status.Errorf(codes.Unimplemented, "method ReportPoseTelemetry not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -130,6 +153,13 @@ func _AgentService_ReportTelemetry_Handler(srv interface{}, stream grpc.ServerSt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentService_ReportTelemetryServer = grpc.ClientStreamingServer[TelemetryEvent, TelemetryAck]
 
+func _AgentService_ReportPoseTelemetry_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(AgentServiceServer).ReportPoseTelemetry(&grpc.GenericServerStream[PoseTelemetryEvent, PoseTelemetryAck]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentService_ReportPoseTelemetryServer = grpc.ClientStreamingServer[PoseTelemetryEvent, PoseTelemetryAck]
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -147,6 +177,11 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ReportTelemetry",
 			Handler:       _AgentService_ReportTelemetry_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ReportPoseTelemetry",
+			Handler:       _AgentService_ReportPoseTelemetry_Handler,
 			ClientStreams: true,
 		},
 	},

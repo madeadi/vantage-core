@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 	agentv1 "vantageos-core/proto/agent/v1"
 )
 
@@ -19,13 +21,16 @@ type agentStream struct {
 }
 
 type AgentRegistry struct {
-	mu            sync.RWMutex
-	tokens        map[AgentID]string
-	onlineAgents  map[AgentID]*Agent
-	streams       map[AgentID]*agentStream
-	skills        map[AgentID][]AgentSkill
+	mu                sync.RWMutex
+	tokens            map[AgentID]string
+	onlineAgents      map[AgentID]*Agent
+	streams           map[AgentID]*agentStream
+	skills            map[AgentID][]AgentSkill
 	allowedAgents     []AllowedAgent // pre-shared key → agentID, issued per device at provisioning
 	grpcAdvertiseAddr string
+
+	poseListener *PoseListener
+	stop         func() // cancels the poseListener background goroutine
 }
 
 func NewAgentRegistry(allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *AgentRegistry {
@@ -34,6 +39,11 @@ func NewAgentRegistry(allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *A
 		slog.Info("Agent", "agentID", allowedAgent.AgentID, "name", allowedAgent.Name)
 	}
 
+	keepPoseHistory := 1 * time.Hour
+	poseListener := NewPoseListener(keepPoseHistory)
+	poseCtx, cancelPose := context.WithCancel(context.Background())
+	go poseListener.Run(poseCtx)
+
 	return &AgentRegistry{
 		onlineAgents:      make(map[AgentID]*Agent),
 		tokens:            make(map[AgentID]string),
@@ -41,6 +51,8 @@ func NewAgentRegistry(allowedAgents []AllowedAgent, grpcAdvertiseAddr string) *A
 		skills:            make(map[AgentID][]AgentSkill),
 		allowedAgents:     allowedAgents,
 		grpcAdvertiseAddr: grpcAdvertiseAddr,
+		poseListener:      poseListener,
+		stop:              cancelPose,
 	}
 }
 
@@ -169,4 +181,12 @@ func (r *AgentRegistry) GetSkill(agentID AgentID, name string) (AgentSkill, bool
 		}
 	}
 	return AgentSkill{}, false
+}
+
+func (r *AgentRegistry) OnPoseUpdate(agentID AgentID, event *agentv1.PoseTelemetryEvent) {
+	r.poseListener.OnPoseUpdate(agentID, event)
+}
+
+func (r *AgentRegistry) Close() {
+	r.stop()
 }

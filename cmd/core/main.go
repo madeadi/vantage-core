@@ -46,7 +46,9 @@ func main() {
 	if grpcAdvertiseAddr == "" {
 		grpcAdvertiseAddr = "localhost:9090"
 	}
+
 	registry := NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
+	defer registry.Close()
 	tm := &TaskManager{sender: registry, currentTasks: make(map[AgentID]*Task)}
 	_ = tm // wired; expose via HTTP handlers in a follow-on
 
@@ -65,7 +67,11 @@ func main() {
 		grpc.StreamInterceptor(authStreamInterceptor(registry)),
 	)
 	telemetry := NewTelemetryListener()
-	agentv1.RegisterAgentServiceServer(grpcServer, &agentGRPCServer{registry: registry, telemetry: telemetry})
+	agentv1.RegisterAgentServiceServer(grpcServer, &agentGRPCServer{
+		registry:  registry,
+		telemetry: telemetry,
+		pose:      registry,
+	})
 	go func() {
 		slog.Info("gRPC listening", "addr", grpcListenAddr)
 		if err := grpcServer.Serve(lis); err != nil {

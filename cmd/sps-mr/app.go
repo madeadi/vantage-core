@@ -4,18 +4,26 @@ import (
 	"context"
 	"log/slog"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 	"vantageos-core/pkg/agent/server"
+	"vantageos-core/pkg/agent/service"
 	agentv1 "vantageos-core/proto/agent/v1"
 )
 
 type App struct {
-	// Robot  Robot
+	Robot  Robot
 	Config Config
 	Server server.Server
+}
 
-	client agentv1.AgentServiceClient
+func NewApp(robot Robot, cfg Config, srv server.Server) *App {
+	return &App{
+		Robot:  robot,
+		Config: cfg,
+		Server: srv,
+	}
 }
 
 func (a *App) Run() {
@@ -27,6 +35,10 @@ func (a *App) Run() {
 	const backoffMax = 60 * time.Second
 	backoff := time.Second
 
+	// services
+	pt := service.NewStreamPose(a.Config.AgentID, a.Robot, 500*time.Millisecond, a.Config.LayoutID)
+	st := service.NewStreamTask(a.Config.AgentID)
+
 	serverCfg := server.ConnectConfig{
 		AgentID: a.Config.AgentID,
 		Key:     a.Config.Key,
@@ -37,8 +49,21 @@ func (a *App) Run() {
 		if err != nil {
 			slog.Error("failed to connect", "err", err)
 		} else {
-			a.client = agentv1.NewAgentServiceClient(conn)
-			runTelemetry(ctx, a.client, a.Config.AgentID)
+			client := agentv1.NewAgentServiceClient(conn)
+
+			connCtx, connCancel := context.WithCancel(ctx)
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer connCancel() // ensure st.Run exits if pt fails
+				pt.Run(connCtx, client)
+			}()
+
+			st.Run(connCtx, client)
+
+			connCancel()
+			wg.Wait()
 			conn.Close()
 			backoff = time.Second
 		}

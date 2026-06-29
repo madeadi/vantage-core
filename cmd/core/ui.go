@@ -13,18 +13,26 @@ import (
 //go:embed web
 var webFS embed.FS
 
+type AgentWithPose struct {
+	Agent
+	Pose LayoutPose
+}
+
 type RegistryStats struct {
-	ConnectedAgents int     `json:"connected_agents"`
-	TotalAgents     int     `json:"total_agents"`
-	Agents          []Agent `json:"agents"`
+	ConnectedAgents int            `json:"connected_agents"`
+	TotalAgents     int            `json:"total_agents"`
+	Agents          []AgentWithPose `json:"agents"`
 }
 
 func (r *AgentRegistry) Stats() RegistryStats {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	agents := make([]Agent, 0, len(r.onlineAgents))
+	agents := make([]AgentWithPose, 0, len(r.onlineAgents))
 	for _, a := range r.onlineAgents {
-		agents = append(agents, *a)
+		agents = append(agents, AgentWithPose{
+			Agent: *a,
+			Pose:  r.poseListener.GetLatestPose(a.ID),
+		})
 	}
 	return RegistryStats{
 		ConnectedAgents: len(r.onlineAgents),
@@ -80,9 +88,19 @@ func buildStatsFragment(s RegistryStats) string {
 	} else {
 		b.WriteString(`<ul class="agent-list">`)
 		for _, a := range s.Agents {
+			pose := a.Pose
+			var poseStr string
+			if pose.Timestamp.IsZero() {
+				poseStr = `<span class="pose-empty">no pose</span>`
+			} else {
+				poseStr = fmt.Sprintf(
+					`<span class="pose">x&nbsp;%.2f&nbsp; y&nbsp;%.2f&nbsp; yaw&nbsp;%.1f°</span>`,
+					pose.X, pose.Y, pose.Yaw,
+				)
+			}
 			fmt.Fprintf(&b,
-				`<li class="agent-item"><span class="dot"></span><span class="agent-name">%s</span><span class="agent-id">%s</span></li>`,
-				html.EscapeString(a.Name), html.EscapeString(string(a.ID)),
+				`<li class="agent-item"><span class="dot"></span><span class="agent-name">%s</span><span class="agent-id">%s</span>%s</li>`,
+				html.EscapeString(a.Name), html.EscapeString(string(a.ID)), poseStr,
 			)
 		}
 		b.WriteString(`</ul>`)

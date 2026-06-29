@@ -6,17 +6,23 @@ import (
 	"log/slog"
 	"strings"
 
+	agentv1 "vantageos-core/proto/agent/v1"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	agentv1 "vantageos-core/proto/agent/v1"
 )
+
+type LayoutPoseListener interface {
+	OnPoseUpdate(agentID AgentID, pose *agentv1.PoseTelemetryEvent)
+}
 
 type agentGRPCServer struct {
 	agentv1.UnimplementedAgentServiceServer
 	registry  *AgentRegistry
 	telemetry *TelemetryListener
+	pose      LayoutPoseListener
 }
 
 func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksServer) error {
@@ -57,6 +63,23 @@ func (s *agentGRPCServer) ReportTelemetry(stream agentv1.AgentService_ReportTele
 			return err
 		}
 		s.telemetry.Handle(agentID, event)
+	}
+}
+
+func (s *agentGRPCServer) ReportPoseTelemetry(stream agentv1.AgentService_ReportPoseTelemetryServer) error {
+	agentID := agentIDFromContext(stream.Context())
+	slog.Info("ReportPoseTelemetry: agent connected", "agent_id", agentID)
+	for {
+		event, err := stream.Recv()
+		if err == io.EOF {
+			_ = stream.SendAndClose(&agentv1.PoseTelemetryAck{})
+			return nil
+		}
+		if err != nil {
+			slog.Error("ReportPoseTelemetry: recv error", "agent_id", agentID, "err", err)
+			return err
+		}
+		s.pose.OnPoseUpdate(agentID, event)
 	}
 }
 
