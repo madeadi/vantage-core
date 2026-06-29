@@ -11,10 +11,14 @@ go build ./...
 # Run with hot reload (requires air)
 make dev-core       # runs cmd/core with core.config.yaml
 make dev-smallbot   # runs cmd/smallbot with smallbot.config.yaml
+make dev-sps-mr     # runs cmd/sps-mr with spsmr.config.yaml
 
 # Run directly
 go run ./cmd/core -config core.config.yaml
 go run ./cmd/smallbot -config smallbot.config.yaml
+
+# Regenerate protobuf
+make proto
 
 # Regenerate Swagger docs (run after any handler change)
 swag init -g cmd/core/main.go -o docs
@@ -22,30 +26,40 @@ swag init -g cmd/core/main.go -o docs
 
 ## Architecture
 
-Two binaries share a single module (`vantageos-core`):
+Multiple binaries share a single module (`vantageos-core`):
 
-- **`cmd/core`** — the central server. Runs an HTTP + WebSocket server on `:8080`.
-- **`cmd/smallbot`** — a reference agent implementation that registers with core and receives tasks.
+- **`cmd/core`** — the central server. Runs HTTP on `:8080` and gRPC on `:9090`.
+- **`cmd/smallbot`** — reference agent implementation.
+- **`cmd/sps-mr`** — SPS mobile robot agent.
+- **`cmd/mission-sps`** — SPS food delivery mission runner.
 
 ### Communication flow
 
-1. Agent POSTs `Bearer <device-key>` to `POST /agents/register` → receives `{ token, ws_url, topic_tasks, topic_telemetry }`
-2. Agent connects to `ws://host/ws?agent_id=<id>&token=<token>` (validated by core before upgrade)
-3. Agent sends `{"type":"subscribe","topic":"agents/<id>/tasks"}` over WebSocket
-4. Core publishes tasks via `{"type":"message","topic":"agents/<id>/tasks","payload":...}`
-5. Agent publishes telemetry via `{"type":"publish","topic":"agents/<id>/telemetry","payload":...}`
+1. Agent POSTs `Bearer <device-key>` to `POST /agents/register` → receives `{ agent_id, token, grpc_url }`
+2. Agent opens gRPC stream `AgentService.StreamTasks` with metadata `authorization: Bearer <token>` and `agent_id: <id>`
+3. Core pushes tasks as `ServerMessage` over the stream; agent replies with `TaskAck` status updates
+4. Agent opens `AgentService.ReportTelemetry` and `AgentService.ReportPoseTelemetry` streams for sensor data and pose
+5. On reconnect, core re-dispatches any active tasks to the agent automatically
 
 ### Key packages
 
-- **`pkg/pubsub`** — `PubSub` interface + two implementations: `MQTTClient` (legacy, unused by core) and `WSHub` (active). `WSHub` is both the WebSocket upgrader (`ServeHTTP`) and the pub/sub router. Agents subscribe/unsubscribe/publish by sending JSON envelopes; the hub routes inbound agent messages to core-side handlers registered via `Subscribe()`.
-- **`pkg/agent`** — shared types between core and agents (currently just `RegisterResponse`).
+- **`pkg/agentsdk`** — agent-side SDK: skill runner, service manager, task dispatcher used by agent binaries.
+- **`pkg/pubsub`** — legacy WebSocket pub/sub hub (unused by core, kept for reference).
+- **`pkg/util`** — shared utilities.
 
 ### Inside `cmd/core`
 
-- `AgentRegistry` — tracks allowed agents (pre-shared keys), online agents, tokens, and skills. Also implements `Onliner` for the task manager.
-- `TaskManager` — publishes to `agents/<agentID>/tasks` via the `Publisher` interface. Blocks if the agent is offline or already busy.
-- `TelemetryListener` — subscribes to `agents/<agentID>/telemetry` per agent via `Watch(agentID)`.
-- `/ws` route in `main.go` wraps `hub.ServeHTTP` with token auth before the WebSocket upgrade.
+- `AgentRegistry` — tracks allowed agents (pre-shared keys), online agents, tokens, skills, and gRPC streams. Implements `Reconnector` to re-dispatch active tasks on reconnect.
+- `TaskRepo` / `TaskRepoMemory` — stores tasks; read methods return copies to avoid data races.
+- `TaskUpdatedHandlerMemory` — updates task status in the repo when a `TaskAck` arrives from an agent.
+- `TelemetryListener` — handles inbound telemetry events from agents.
+- `agentGRPCServer` — gRPC server implementing `StreamTasks`, `ReportTelemetry`, `ReportPoseTelemetry`, and `GetTransformationMatrices`.
+
+### Task dispatch invariants
+
+- Tasks are saved to the repo **before** being sent over the gRPC stream (prevents dropped ACKs on fast agents).
+- Only one active task per agent is allowed; `SendTask` rejects with "agent is busy" if `GetActiveTasksByAgent` returns results.
+- Both checks happen inside `as.mu.Lock()` so they are atomic with respect to concurrent dispatch attempts.
 
 ### Swagger
 
