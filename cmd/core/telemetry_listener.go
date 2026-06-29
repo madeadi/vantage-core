@@ -13,5 +13,5 @@ func NewTelemetryListener() *TelemetryListener {
 }
 
 func (t *TelemetryListener) Handle(agentID AgentID, event *agentv1.TelemetryEvent) {
-	slog.Info("telemetry received", "agent", agentID, "payload", string(event.Payload))
+	slog.Info("telemetry received", "agentsdk", agentID, "payload", string(event.Payload))
 }

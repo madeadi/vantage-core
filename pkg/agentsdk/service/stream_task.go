@@ -1,5 +1,5 @@
 // Package service contains the long-running gRPC streaming loops that connect
-// an agent process to the core server.
+// an agentsdk process to the core server.
 package service
 
 import (
@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"sync"
-	"time"
 	agentv1 "vantageos-core/proto/agent/v1"
 
 	"google.golang.org/grpc"
@@ -20,12 +19,14 @@ import (
 type StreamTask struct {
 	agentID string
 	sendMu  sync.Mutex
+
+	tm *AgentTaskManager
 }
 
 // NewStreamTask returns a StreamTask that identifies itself to the server
 // with the given agentID.
-func NewStreamTask(agentID string) *StreamTask {
-	return &StreamTask{agentID: agentID}
+func NewStreamTask(agentID string, tm *AgentTaskManager) *StreamTask {
+	return &StreamTask{agentID: agentID, tm: tm}
 }
 
 // send serialises all stream.Send calls — gRPC prohibits concurrent sends on the same stream.
@@ -38,10 +39,10 @@ func (s *StreamTask) send(stream grpc.BidiStreamingClient[agentv1.TaskAck, agent
 // Run opens the StreamTasks bidirectional stream and processes messages until
 // ctx is cancelled or the stream closes.
 //
-// For each incoming Task it spawns a goroutine that sends a STARTED ack,
-// simulates work, then sends a FINISHED ack. If an AbortCommand arrives while
-// a task is running, the goroutine is cancelled via context and an ABORTED ack
-// is sent immediately.
+// For each incoming Task it delegates to the AgentTaskManager, which spawns a
+// goroutine, sends a STARTED ack, executes the handler, then sends FINISHED or
+// FAILED. If an AbortCommand arrives while a task is running the manager
+// cancels it and an ABORTED ack is sent immediately.
 func (s *StreamTask) Run(ctx context.Context, client agentv1.AgentServiceClient) {
 	md := metadata.Pairs("agent_id", s.agentID)
 	streamCtx := metadata.NewOutgoingContext(ctx, md)
@@ -52,8 +53,6 @@ func (s *StreamTask) Run(ctx context.Context, client agentv1.AgentServiceClient)
 		return
 	}
 	slog.Info("StreamTasks stream open")
-
-	var currentTaskCancel context.CancelFunc
 
 	for {
 		msg, err := stream.Recv()
@@ -71,53 +70,33 @@ func (s *StreamTask) Run(ctx context.Context, client agentv1.AgentServiceClient)
 			task := payload.Task
 			slog.Info("task received", "id", task.Id, "type", task.Type)
 
-			if currentTaskCancel != nil {
-				currentTaskCancel()
+			onAck := func(ack *agentv1.TaskAck) {
+				if err := s.send(stream, ack); err != nil {
+					slog.Error("failed to send task ack", "task_id", ack.TaskId, "status", ack.Status, "err", err)
+				}
 			}
-			taskCtx, cancel := context.WithCancel(ctx)
-			currentTaskCancel = cancel
 
-			go func(t *agentv1.Task, tCtx context.Context) {
-				defer cancel()
-				if err := s.send(stream, &agentv1.TaskAck{
-					TaskId: t.Id,
-					Status: agentv1.TaskStatus_TASK_STATUS_STARTED,
-				}); err != nil {
-					slog.Error("failed to send STARTED ack", "err", err)
-					return
-				}
-
-				// simulate work — replace with real task execution
-				select {
-				case <-time.After(5 * time.Second):
-					// Guard against the race where abort fired at the same instant.
-					select {
-					case <-tCtx.Done():
-					default:
-						if err := s.send(stream, &agentv1.TaskAck{
-							TaskId: t.Id,
-							Status: agentv1.TaskStatus_TASK_STATUS_FINISHED,
-						}); err != nil {
-							slog.Error("failed to send FINISHED ack", "err", err)
-						}
-						slog.Info("task finished", "id", t.Id)
-					}
-				case <-tCtx.Done():
-					// cancelled by AbortCommand
-				}
-			}(task, taskCtx)
+			if err := s.tm.HandleTask(ctx, task, onAck); err != nil {
+				slog.Error("cannot start task", "id", task.Id, "type", task.Type, "err", err)
+				_ = s.send(stream, &agentv1.TaskAck{
+					TaskId:       task.Id,
+					Status:       agentv1.TaskStatus_TASK_STATUS_CANNOT_START,
+					ErrorMessage: err.Error(),
+				})
+			}
 
 		case *agentv1.ServerMessage_Abort:
-			slog.Info("abort received", "task_id", payload.Abort.TaskId)
-			if currentTaskCancel != nil {
-				currentTaskCancel()
-				currentTaskCancel = nil
-			}
-			if err := s.send(stream, &agentv1.TaskAck{
-				TaskId: payload.Abort.TaskId,
-				Status: agentv1.TaskStatus_TASK_STATUS_ABORTED,
-			}); err != nil {
-				slog.Error("failed to send ABORTED ack", "err", err)
+			taskID := payload.Abort.TaskId
+			slog.Info("abort received", "task_id", taskID)
+			if s.tm.AbortCurrentTask(taskID) {
+				if err := s.send(stream, &agentv1.TaskAck{
+					TaskId: taskID,
+					Status: agentv1.TaskStatus_TASK_STATUS_ABORTED,
+				}); err != nil {
+					slog.Error("failed to send ABORTED ack", "err", err)
+				}
+			} else {
+				slog.Warn("abort received for task that is not running", "task_id", taskID)
 			}
 		}
 	}

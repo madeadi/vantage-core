@@ -79,7 +79,11 @@ func (r *AgentRegistry) Authenticate(agentID AgentID, token string) bool {
 }
 
 func (r *AgentRegistry) Register(agent *Agent, token string, skills []AgentSkill) {
-	slog.Info("Registering Agent", "agent", agent.Name)
+	slog.Info("Registering Agent", "agentsdk", agent.ID, "skills", len(skills))
+	for _, skill := range skills {
+		slog.Info("Agent Skill", "skill_name", skill.Name, "agentsdk", agent.ID)
+	}
+
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tokens[agent.ID] = token
@@ -132,7 +136,7 @@ func (r *AgentRegistry) nameFor(agentID AgentID) string {
 	return ""
 }
 
-// attachStream marks an agent online and stores its live gRPC stream.
+// attachStream marks an agentsdk online and stores its live gRPC stream.
 func (r *AgentRegistry) attachStream(agentID AgentID, s agentv1.AgentService_StreamTasksServer) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -140,7 +144,7 @@ func (r *AgentRegistry) attachStream(agentID AgentID, s agentv1.AgentService_Str
 	r.streams[agentID] = &agentStream{stream: s}
 }
 
-// detachStream marks an agent offline and removes its stream.
+// detachStream marks an agentsdk offline and removes its stream.
 func (r *AgentRegistry) detachStream(agentID AgentID) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -148,13 +152,13 @@ func (r *AgentRegistry) detachStream(agentID AgentID) {
 	delete(r.streams, agentID)
 }
 
-// SendTask pushes a task down the agent's live gRPC stream.
+// SendTask pushes a task down the agentsdk's live gRPC stream.
 func (r *AgentRegistry) SendTask(task *Task) error {
 	r.mu.RLock()
 	as, ok := r.streams[task.AgentID]
 	r.mu.RUnlock()
 	if !ok {
-		return errors.New("no active stream for agent")
+		return errors.New("no active stream for agentsdk")
 	}
 	msg := &agentv1.ServerMessage{
 		Payload: &agentv1.ServerMessage_Task{Task: &agentv1.Task{
@@ -169,7 +173,7 @@ func (r *AgentRegistry) SendTask(task *Task) error {
 }
 
 func (r *AgentRegistry) verifySkillPayload(skill AgentSkill) bool {
-	return skill.Payload.Name != ""
+	return true
 }
 
 func (r *AgentRegistry) GetSkill(agentID AgentID, name string) (AgentSkill, bool) {

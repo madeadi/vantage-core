@@ -10,41 +10,25 @@ definitions:
         type: string
     type: object
   cmd_core.registerRequest:
-    properties:
-      event_sources:
-        items:
-          $ref: '#/definitions/main.EventSource'
-        type: array
-      id:
-        type: string
-      name:
-        type: string
-      skills:
-        items:
-          $ref: '#/definitions/main.AgentSkill'
-        type: array
     type: object
-  main.AgentPayload:
+  main.createTaskRequest:
     properties:
-      name:
-        type: string
-    type: object
-  main.AgentSkill:
-    properties:
-      name:
-        type: string
       payload:
-        $ref: '#/definitions/main.AgentPayload'
+        type: object
+      robotId:
+        type: string
+      type:
+        type: string
     type: object
-  main.EventSource:
+  main.createTaskResponse:
     properties:
-      name:
+      task_id:
         type: string
     type: object
 host: localhost:8080
 info:
   contact: {}
-  description: VantageOS backend — agent registry and task management.
+  description: VantageOS backend — agentsdk registry and task management.
   title: VantageOS Core API
   version: "1.0"
 paths:
@@ -86,7 +70,42 @@ paths:
           description: internal server error
           schema:
             type: string
-      summary: Register an agent
+      summary: Register an agentsdk
       tags:
       - agents
+  /api/v1/tasks:
+    post:
+      consumes:
+      - application/json
+      description: Dispatches a task to a named agentsdk. The agentsdk must be online and
+        idle.
+      parameters:
+      - description: Task payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.createTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.createTaskResponse'
+        "400":
+          description: bad request
+          schema:
+            type: string
+        "409":
+          description: agentsdk offline or busy
+          schema:
+            type: string
+        "500":
+          description: internal server error
+          schema:
+            type: string
+      summary: Create a task
+      tags:
+      - tasks
 swagger: "2.0"

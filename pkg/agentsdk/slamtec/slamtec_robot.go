@@ -13,9 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	agentskill "vantageos-core/pkg/agent_skill"
-	"vantageos-core/pkg/agent_skill/slamtec/action"
+	agentskill2 "vantageos-core/pkg/agentsdk/agent_skill"
+	"vantageos-core/pkg/agentsdk/slamtec/action"
 )
 
 const (
@@ -46,7 +45,7 @@ type SlamtecRobot struct {
 	currentFloor   SlamtecFloor
 	currentFloorMu sync.RWMutex
 
-	robotPose   agentskill.RobotPose
+	robotPose   agentskill2.RobotPose
 	robotPoseMu sync.RWMutex
 
 	pois   []SlamtecPoiSingleFloor
@@ -247,7 +246,7 @@ func (r *SlamtecRobot) runPoseLoop() {
 			continue
 		}
 		r.robotPoseMu.Lock()
-		r.robotPose = agentskill.RobotPose{X: p.X, Y: p.Y, Yaw: p.Yaw}
+		r.robotPose = agentskill2.RobotPose{X: p.X, Y: p.Y, Yaw: p.Yaw}
 		r.robotPoseMu.Unlock()
 	}
 }
@@ -529,7 +528,7 @@ func (r *SlamtecRobot) IsStatusActive(key string) bool {
 
 // ── RobotPoseSkill ────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) GetRobotPose() agentskill.RobotPose {
+func (r *SlamtecRobot) GetRobotPose() agentskill2.RobotPose {
 	r.robotPoseMu.RLock()
 	defer r.robotPoseMu.RUnlock()
 	return r.robotPose
@@ -551,7 +550,7 @@ func (r *SlamtecRobot) getFloor() string {
 
 // ── GoToSkill ─────────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) GoToNamedTarget(ctx context.Context, namedTarget string, opts agentskill.GoToOption) <-chan agentskill.Result {
+func (r *SlamtecRobot) GoToNamedTarget(ctx context.Context, namedTarget string, opts agentskill2.GoToOption) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -568,7 +567,7 @@ func (r *SlamtecRobot) GoToNamedTarget(ctx context.Context, namedTarget string, 
 
 		if found == nil {
 			slog.Error("GoToNamedTarget: POI not found", "name", namedTarget)
-			sendResult(ch, agentskill.Result{Err: fmt.Errorf("POI %q not found", namedTarget), Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: fmt.Errorf("POI %q not found", namedTarget), Status: agentskill2.Failed})
 			return
 		}
 
@@ -587,15 +586,15 @@ func (r *SlamtecRobot) GoToNamedTarget(ctx context.Context, namedTarget string, 
 
 		slog.Info("GoToNamedTarget", "name", namedTarget, "x", found.Pose.X, "y", found.Pose.Y, "mode", mode)
 		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) GoToXY(ctx context.Context, x, y, yaw float64) <-chan agentskill.Result {
+func (r *SlamtecRobot) GoToXY(ctx context.Context, x, y, yaw float64) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -608,15 +607,15 @@ func (r *SlamtecRobot) GoToXY(ctx context.Context, x, y, yaw float64) <-chan age
 		payload.Options.MoveOptions.Mode = defaultMoveMode
 		slog.Info("GoToXY", "x", x, "y", y, "yaw", yaw)
 		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) StopGo(ctx context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) StopGo(ctx context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -624,7 +623,7 @@ func (r *SlamtecRobot) StopGo(ctx context.Context) <-chan agentskill.Result {
 		if err := r.deleteReq("/api/core/motion/v1/actions/:current"); err != nil {
 			slog.Error("StopGo failed", "err", err)
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
@@ -643,24 +642,24 @@ func (r *SlamtecRobot) refreshPois() {
 
 // ── ChargingSkill ─────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) GoChargeNearby(ctx context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) GoChargeNearby(ctx context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("GoChargeNearby: requesting home/charge dock")
 		payload := action.NewGoHomeActionOption()
 		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
 // ── LocaliseSkill ─────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) AutoLocalise(ctx context.Context, layoutID, layoutName, buildingName string) <-chan agentskill.Result {
+func (r *SlamtecRobot) AutoLocalise(ctx context.Context, layoutID, layoutName, buildingName string) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -671,22 +670,22 @@ func (r *SlamtecRobot) AutoLocalise(ctx context.Context, layoutID, layoutName, b
 		if buildingName != "" && layoutName != "" {
 			if err := r.put("/api/multi-floor/map/v1/floors/:current", updateFloor{Building: buildingName, Floor: layoutName}); err != nil {
 				slog.Error("AutoLocalise: updateFloor failed", "err", err)
-				sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+				sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 				return
 			}
 		}
 		select {
 		case <-time.After(3 * time.Second):
 		case <-ctx.Done():
-			sendResult(ch, agentskill.Result{Err: ctx.Err(), Status: agentskill.Cancelled})
+			sendResult(ch, agentskill2.Result{Err: ctx.Err(), Status: agentskill2.Cancelled})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) ManualLocalise(ctx context.Context, layoutID, layoutName, buildingName string, pose agentskill.RobotPose) <-chan agentskill.Result {
+func (r *SlamtecRobot) ManualLocalise(ctx context.Context, layoutID, layoutName, buildingName string, pose agentskill2.RobotPose) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -699,29 +698,29 @@ func (r *SlamtecRobot) ManualLocalise(ctx context.Context, layoutID, layoutName,
 			payload := updateFloor{Building: buildingName, Floor: layoutName, Pose: p}
 			if err := r.put("/api/multi-floor/map/v1/floors/:current", payload); err != nil {
 				slog.Error("ManualLocalise: updateFloor failed", "err", err)
-				sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+				sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 				return
 			}
 		}
 		select {
 		case <-time.After(3 * time.Second):
 		case <-ctx.Done():
-			sendResult(ch, agentskill.Result{Err: ctx.Err(), Status: agentskill.Cancelled})
+			sendResult(ch, agentskill2.Result{Err: ctx.Err(), Status: agentskill2.Cancelled})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
 // ── MapSkill ──────────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) ChangeMap(_ context.Context, newMap string) <-chan agentskill.Result {
+func (r *SlamtecRobot) ChangeMap(_ context.Context, newMap string) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("ChangeMap", "newMap", newMap)
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
@@ -734,144 +733,144 @@ func (r *SlamtecRobot) SyncZones() {
 
 // ── MaintenanceModeSkill ──────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) EnableMaintenance(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) EnableMaintenance(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("EnableMaintenance")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) DisableMaintenance(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) DisableMaintenance(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("DisableMaintenance")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
 // ── MoveSkill ─────────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) MoveForward(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) MoveForward(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Debug("MoveForward")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) MoveBackward(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) MoveBackward(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Debug("MoveBackward")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) TurnLeft(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) TurnLeft(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Debug("TurnLeft")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) TurnRight(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) TurnRight(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Debug("TurnRight")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) StopMoving(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) StopMoving(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("StopMoving")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) Move(_ context.Context, linearVel, angularVel float64) <-chan agentskill.Result {
+func (r *SlamtecRobot) Move(_ context.Context, linearVel, angularVel float64) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Debug("Move", "linear", linearVel, "angular", angularVel)
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
 // ── DeviceSkill ───────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) SendToDevice(_ context.Context, device agentskill.Device, payload map[string]any) <-chan agentskill.Result {
+func (r *SlamtecRobot) SendToDevice(_ context.Context, device agentskill2.Device, payload map[string]any) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("SendToDevice", "device", device.ID, "payload", payload)
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) GetDeviceStatus(_ agentskill.Device) map[string]any {
+func (r *SlamtecRobot) GetDeviceStatus(_ agentskill2.Device) map[string]any {
 	return map[string]any{}
 }
 
 // ── IdleMediaSkill ────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) DisplayIdleMediaSequence(seq agentskill.IdleMediaSequence) {
+func (r *SlamtecRobot) DisplayIdleMediaSequence(seq agentskill2.IdleMediaSequence) {
 	slog.Info("DisplayIdleMediaSequence", "items", seq.Items)
 }
 
 // ── SoundSkill ────────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) PlayMediaSound(_ context.Context, media string) <-chan agentskill.Result {
+func (r *SlamtecRobot) PlayMediaSound(_ context.Context, media string) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("PlayMediaSound", "media", media)
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) PlayTextSound(_ context.Context, text string) <-chan agentskill.Result {
+func (r *SlamtecRobot) PlayTextSound(_ context.Context, text string) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("PlayTextSound", "text", text)
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) ResetSound(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) ResetSound(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("ResetSound")
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) GetSoundStatus() agentskill.SoundStatus {
-	return agentskill.SoundOff
+func (r *SlamtecRobot) GetSoundStatus() agentskill2.SoundStatus {
+	return agentskill2.SoundOff
 }
 
 func (r *SlamtecRobot) WhatsPlayingOnSound() string { return "" }
@@ -895,41 +894,41 @@ func (r *SlamtecRobot) IsBrakeOn() bool {
 
 // ── SoftBrakeSkill ────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) ActivateSoftBrake(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) ActivateSoftBrake(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("ActivateSoftBrake: triggering emergency stop")
 		if err := r.put("/api/core/system/v1/parameter", paramEmergencyStopOn()); err != nil {
 			slog.Error("ActivateSoftBrake failed", "err", err)
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 		r.softBrakeActive.Store(true)
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) ReleaseSoftBrake(_ context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) ReleaseSoftBrake(_ context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("ReleaseSoftBrake: releasing emergency stop")
 		if err := r.put("/api/core/system/v1/parameter", paramEmergencyStopOff()); err != nil {
 			slog.Error("ReleaseSoftBrake failed", "err", err)
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 		r.softBrakeActive.Store(false)
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
 // ── LiftTakingSkill ───────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) EnterLift(ctx context.Context, lift agentskill.Lift) <-chan agentskill.Result {
+func (r *SlamtecRobot) EnterLift(ctx context.Context, lift agentskill2.Lift) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -938,12 +937,12 @@ func (r *SlamtecRobot) EnterLift(ctx context.Context, lift agentskill.Lift) <-ch
 		var elevator Elevator
 		if err := r.get("/api/multi-floor/map/v1/elevators/"+lift.ID, &elevator); err != nil {
 			slog.Error("EnterLift: getElevator failed", "liftId", lift.ID, "err", err)
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 		if len(elevator.FrontSchedulingPoses) == 0 {
 			err := fmt.Errorf("elevator %s has no front scheduling poses", lift.ID)
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 		front := elevator.FrontSchedulingPoses[0]
@@ -953,7 +952,7 @@ func (r *SlamtecRobot) EnterLift(ctx context.Context, lift agentskill.Lift) <-ch
 		movePayload := action.NewMoveToActionXYYaw(front.X, front.Y, front.Yaw)
 		movePayload.Options.MoveOptions.Mode = defaultMoveMode
 		if err := r.submitAction(ctx, movePayload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 
@@ -961,7 +960,7 @@ func (r *SlamtecRobot) EnterLift(ctx context.Context, lift agentskill.Lift) <-ch
 		slog.Info("EnterLift: entering elevator", "elevatorId", elevator.ID)
 		enterPayload := action.NewEnterElevatorAction(elevator.ID)
 		if err := r.submitAction(ctx, enterPayload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 
@@ -969,31 +968,31 @@ func (r *SlamtecRobot) EnterLift(ctx context.Context, lift agentskill.Lift) <-ch
 		slog.Info("EnterLift: rotating 180°")
 		rotatePayload := action.NewRotateAction(math.Pi)
 		if err := r.submitAction(ctx, rotatePayload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) ExitLift(ctx context.Context, lift agentskill.Lift) <-chan agentskill.Result {
+func (r *SlamtecRobot) ExitLift(ctx context.Context, lift agentskill2.Lift) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("ExitLift", "liftId", lift.ID)
 		payload := action.NewLeaveElevatorAction(lift.ID)
 		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) LocaliseInLift(_ agentskill.Lift, floor agentskill.Floor) bool {
+func (r *SlamtecRobot) LocaliseInLift(_ agentskill2.Lift, floor agentskill2.Floor) bool {
 	slog.Info("LocaliseInLift", "building", floor.Building, "level", floor.Level)
 	if err := r.put("/api/multi-floor/map/v1/floors/:current", updateFloor{Building: floor.Building, Floor: floor.Level}); err != nil {
 		slog.Error("LocaliseInLift: updateFloor failed", "err", err)
@@ -1002,53 +1001,53 @@ func (r *SlamtecRobot) LocaliseInLift(_ agentskill.Lift, floor agentskill.Floor)
 	return true
 }
 
-func (r *SlamtecRobot) LiftStatusCh() <-chan agentskill.LiftStatus {
+func (r *SlamtecRobot) LiftStatusCh() <-chan agentskill2.LiftStatus {
 	return nil
 }
 
 // ── JackUpDownSkill ───────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) StartJackUp(ctx context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) StartJackUp(ctx context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("StartJackUp: sending Up command")
 		if err := r.sendJackCommand(ctx, jackUp, "StartJackUp"); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 		slog.Info("StartJackUp: polling for stage=5")
 		if err := r.pollJackStatus(ctx, 5, "StartJackUp"); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
-func (r *SlamtecRobot) StartJackDown(ctx context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) StartJackDown(ctx context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("StartJackDown: sending Down command")
 		if err := r.sendJackCommand(ctx, jackDown, "StartJackDown"); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 		slog.Info("StartJackDown: polling for stage=2")
 		if err := r.pollJackStatus(ctx, 2, "StartJackDown"); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
 // ── AdvancedJackUpDownSkill ───────────────────────────────────────────────────
 
-func (r *SlamtecRobot) JackUp(ctx context.Context, tagX, tagY, tagYaw, _, _ float64, _ []int) <-chan agentskill.Result {
+func (r *SlamtecRobot) JackUp(ctx context.Context, tagX, tagY, tagYaw, _, _ float64, _ []int) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -1056,7 +1055,7 @@ func (r *SlamtecRobot) JackUp(ctx context.Context, tagX, tagY, tagYaw, _, _ floa
 
 		payload := action.NewMoveToTagAction(tagX, tagY, tagYaw)
 		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
 
@@ -1067,14 +1066,14 @@ func (r *SlamtecRobot) JackUp(ctx context.Context, tagX, tagY, tagYaw, _, _ floa
 	return ch
 }
 
-func (r *SlamtecRobot) JackDown(ctx context.Context) <-chan agentskill.Result {
+func (r *SlamtecRobot) JackDown(ctx context.Context) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
 		slog.Info("JackDown: deactivating lift then backing off")
 
 		result := <-r.StartJackDown(ctx)
-		if result.Status != agentskill.Success {
+		if result.Status != agentskill2.Success {
 			sendResult(ch, result)
 			return
 		}
@@ -1082,17 +1081,17 @@ func (r *SlamtecRobot) JackDown(ctx context.Context) <-chan agentskill.Result {
 		slog.Info("JackDown: backing off from tag")
 		payload := action.NewBackOffFromTagAction()
 		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
 
 // ── MoveToTagSkill ────────────────────────────────────────────────────────────
 
-func (r *SlamtecRobot) MoveToTagWithOptions(ctx context.Context, options map[string]any) <-chan agentskill.Result {
+func (r *SlamtecRobot) MoveToTagWithOptions(ctx context.Context, options map[string]any) <-chan agentskill2.Result {
 	ch := resultCh()
 	go func() {
 		defer close(ch)
@@ -1101,14 +1100,14 @@ func (r *SlamtecRobot) MoveToTagWithOptions(ctx context.Context, options map[str
 			ActionName string         `json:"action_name"`
 			Options    map[string]any `json:"options"`
 		}{
-			ActionName: "slamtec.agent.actions.MoveToTagAction",
+			ActionName: "slamtec.agentsdk.actions.MoveToTagAction",
 			Options:    options,
 		}
 		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill.Result{Err: err, Status: agentskill.Failed})
+			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
 			return
 		}
-		sendResult(ch, agentskill.Result{Status: agentskill.Success})
+		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
 	}()
 	return ch
 }
@@ -1166,11 +1165,11 @@ func (r *SlamtecRobot) isRelevantDockingEvent(t string) bool {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-func resultCh() chan agentskill.Result {
-	return make(chan agentskill.Result, 1)
+func resultCh() chan agentskill2.Result {
+	return make(chan agentskill2.Result, 1)
 }
 
-func sendResult(ch chan<- agentskill.Result, r agentskill.Result) {
+func sendResult(ch chan<- agentskill2.Result, r agentskill2.Result) {
 	select {
 	case ch <- r:
 	default:

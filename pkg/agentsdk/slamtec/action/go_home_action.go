@@ -7,7 +7,7 @@ type GoHomeActionOption struct {
 
 func NewGoHomeActionOption() GoHomeActionOption {
 	return GoHomeActionOption{
-		Action: Action{ActionName: "slamtec.agent.actions.GoHomeAction"},
+		Action: Action{ActionName: "slamtec.agentsdk.actions.GoHomeAction"},
 		Options: map[string]any{
 			"gohome_options": map[string]any{
 				"back_to_landing":      false,

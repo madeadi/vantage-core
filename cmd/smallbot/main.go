@@ -12,14 +12,15 @@ import (
 	"os"
 	"syscall"
 	"time"
-	"vantageos-core/pkg/agent"
+	"vantageos-core/pkg/agentsdk"
 	agentv1 "vantageos-core/proto/agent/v1"
+
+	"os/signal"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v3"
-	"os/signal"
 )
 
 type Config struct {
@@ -51,7 +52,7 @@ func loadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-func register(cfg *Config) (*agent.RegisterResponse, error) {
+func register(cfg *Config) (*agentsdk.RegisterResponse, error) {
 	body, err := json.Marshal(registerRequest{
 		ID:           cfg.AgentID,
 		Name:         cfg.AgentName,
@@ -79,7 +80,7 @@ func register(cfg *Config) (*agent.RegisterResponse, error) {
 		return nil, fmt.Errorf("registration rejected: status %d", resp.StatusCode)
 	}
 
-	var regResp agent.RegisterResponse
+	var regResp agentsdk.RegisterResponse
 	if err := json.NewDecoder(resp.Body).Decode(&regResp); err != nil {
 		return nil, err
 	}

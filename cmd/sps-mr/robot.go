@@ -1,8 +1,11 @@
 package main
 
-import agentskill "vantageos-core/pkg/agent_skill"
+import (
+	agentskill2 "vantageos-core/pkg/agentsdk/agent_skill"
+)
 
 type Robot interface {
-	agentskill.RobotPoseSkill
-	agentskill.GoToSkill
+	agentskill2.RobotPoseSkill
+	agentskill2.GoToSkill
+	agentskill2.ChargingSkill
 }

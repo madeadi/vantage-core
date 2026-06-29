@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/agents/register": {
             "post": {
-                "description": "Called by a physical agent on boot to register its identity and skills.\nThe request must include a pre-shared device API key as a Bearer token.",
+                "description": "Called by a physical agentsdk on boot to register its identity and skills.\nThe request must include a pre-shared device API key as a Bearer token.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27,7 +27,7 @@ const docTemplate = `{
                 "tags": [
                     "agents"
                 ],
-                "summary": "Register an agent",
+                "summary": "Register an agentsdk",
                 "parameters": [
                     {
                         "type": "string",
@@ -50,7 +50,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/agent.RegisterResponse"
+                            "$ref": "#/definitions/agentsdk.RegisterResponse"
                         }
                     },
                     "400": {
@@ -73,10 +73,62 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/v1/tasks": {
+            "post": {
+                "description": "Dispatches a task to a named agentsdk. The agentsdk must be online and idle.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Create a task",
+                "parameters": [
+                    {
+                        "description": "Task payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.createTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.createTaskResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "agentsdk offline or busy",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
-        "agent.RegisterResponse": {
+        "agentsdk.RegisterResponse": {
             "type": "object",
             "properties": {
                 "agent_id": {
@@ -91,51 +143,26 @@ const docTemplate = `{
             }
         },
         "cmd_core.registerRequest": {
-            "type": "object",
-            "properties": {
-                "event_sources": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/main.EventSource"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "skills": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/main.AgentSkill"
-                    }
-                }
-            }
+            "type": "object"
         },
-        "main.AgentPayload": {
+        "main.createTaskRequest": {
             "type": "object",
             "properties": {
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "main.AgentSkill": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
                 "payload": {
-                    "$ref": "#/definitions/main.AgentPayload"
+                    "type": "object"
+                },
+                "robotId": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
                 }
             }
         },
-        "main.EventSource": {
+        "main.createTaskResponse": {
             "type": "object",
             "properties": {
-                "name": {
+                "task_id": {
                     "type": "string"
                 }
             }
@@ -150,7 +177,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "VantageOS Core API",
-	Description:      "VantageOS backend — agent registry and task management.",
+	Description:      "VantageOS backend — agentsdk registry and task management.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

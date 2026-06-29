@@ -4,7 +4,7 @@ package agent.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "vantageos-core/proto/agent/v1;agentv1";
+option go_package = "vantageos-core/proto/agentsdk/v1;agentv1";
 
 // AgentService is the gRPC contract between core and agents.
 service AgentService {

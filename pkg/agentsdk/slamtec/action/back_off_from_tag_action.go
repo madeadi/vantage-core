@@ -7,6 +7,6 @@ type BackOffFromTagAction struct {
 
 func NewBackOffFromTagAction() BackOffFromTagAction {
 	return BackOffFromTagAction{
-		Action: Action{ActionName: "slamtec.agent.actions.BackOffFromTagAction"},
+		Action: Action{ActionName: "slamtec.agentsdk.actions.BackOffFromTagAction"},
 	}
 }

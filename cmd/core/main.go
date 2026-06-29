@@ -1,6 +1,6 @@
 // @title           VantageOS Core API
 // @version         1.0
-// @description     VantageOS backend — agent registry and task management.
+// @description     VantageOS backend — agentsdk registry and task management.
 // @host            localhost:8080
 // @BasePath        /
 package main
@@ -50,11 +50,12 @@ func main() {
 	registry := NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
 	defer registry.Close()
 	tm := &TaskManager{sender: registry, currentTasks: make(map[AgentID]*Task)}
-	_ = tm // wired; expose via HTTP handlers in a follow-on
+	taskHTTP := &TaskHTTP{tm: tm}
 
 	mux := http.NewServeMux()
 	registry.RegisterRoutes(mux)
 	registry.RegisterUIRoutes(mux)
+	taskHTTP.RegisterRoutes(mux)
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 
 	// gRPC server

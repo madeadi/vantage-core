@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"vantageos-core/pkg/agent"
+	"vantageos-core/pkg/agentsdk"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -24,10 +24,19 @@ func (t tokenCreds) GetRequestMetadata(_ context.Context, _ ...string) (map[stri
 
 func (t tokenCreds) RequireTransportSecurity() bool { return false }
 
+type SkillPayload struct {
+	Name string `json:"name"`
+}
+
+type Skill struct {
+	Name    string       `json:"name"`
+	Payload SkillPayload `json:"payload"`
+}
+
 type registerRequest struct {
 	ID           string        `json:"id"`
 	Name         string        `json:"name"`
-	Skills       []interface{} `json:"skills"`
+	Skills       []Skill       `json:"skills"`
 	EventSources []interface{} `json:"event_sources"`
 }
 
@@ -39,13 +48,14 @@ type ConnectConfig struct {
 	AgentID string
 	Key     string
 	Name    string
+	Skills  []Skill
 }
 
 func (s *Server) Connect(config ConnectConfig) (*grpc.ClientConn, error) {
 	body, err := json.Marshal(registerRequest{
 		ID:           config.AgentID,
 		Name:         config.Name,
-		Skills:       []interface{}{},
+		Skills:       config.Skills,
 		EventSources: []interface{}{},
 	})
 	if err != nil {
@@ -69,7 +79,7 @@ func (s *Server) Connect(config ConnectConfig) (*grpc.ClientConn, error) {
 		return nil, fmt.Errorf("registration rejected: status %d", resp.StatusCode)
 	}
 
-	var regResp agent.RegisterResponse
+	var regResp agentsdk.RegisterResponse
 	if err := json.NewDecoder(resp.Body).Decode(&regResp); err != nil {
 		return nil, err
 	}

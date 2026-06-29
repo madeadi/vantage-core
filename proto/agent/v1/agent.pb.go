@@ -802,7 +802,7 @@ const file_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\fAgentService\x12=\n" +
 	"\vStreamTasks\x12\x11.agent.v1.TaskAck\x1a\x17.agent.v1.ServerMessage(\x010\x01\x12E\n" +
 	"\x0fReportTelemetry\x12\x18.agent.v1.TelemetryEvent\x1a\x16.agent.v1.TelemetryAck(\x01\x12Q\n" +
-	"\x13ReportPoseTelemetry\x12\x1c.agent.v1.PoseTelemetryEvent\x1a\x1a.agent.v1.PoseTelemetryAck(\x01B'Z%vantageos-core/proto/agent/v1;agentv1b\x06proto3"
+	"\x13ReportPoseTelemetry\x12\x1c.agent.v1.PoseTelemetryEvent\x1a\x1a.agent.v1.PoseTelemetryAck(\x01B*Z(vantageos-core/proto/agentsdk/v1;agentv1b\x06proto3"
 
 var (
 	file_proto_agent_v1_agent_proto_rawDescOnce sync.Once

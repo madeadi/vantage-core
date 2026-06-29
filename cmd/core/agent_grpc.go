@@ -27,12 +27,12 @@ type agentGRPCServer struct {
 
 func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksServer) error {
 	agentID := agentIDFromContext(stream.Context())
-	slog.Info("StreamTasks: agent connected", "agent_id", agentID)
+	slog.Info("StreamTasks: agentsdk connected", "agent_id", agentID)
 
 	s.registry.attachStream(agentID, stream)
 	defer func() {
 		s.registry.detachStream(agentID)
-		slog.Info("StreamTasks: agent disconnected", "agent_id", agentID)
+		slog.Info("StreamTasks: agentsdk disconnected", "agent_id", agentID)
 	}()
 
 	for {
@@ -50,7 +50,7 @@ func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksSer
 
 func (s *agentGRPCServer) ReportTelemetry(stream agentv1.AgentService_ReportTelemetryServer) error {
 	agentID := agentIDFromContext(stream.Context())
-	slog.Info("ReportTelemetry: agent connected", "agent_id", agentID)
+	slog.Info("ReportTelemetry: agentsdk connected", "agent_id", agentID)
 
 	for {
 		event, err := stream.Recv()
@@ -68,7 +68,7 @@ func (s *agentGRPCServer) ReportTelemetry(stream agentv1.AgentService_ReportTele
 
 func (s *agentGRPCServer) ReportPoseTelemetry(stream agentv1.AgentService_ReportPoseTelemetryServer) error {
 	agentID := agentIDFromContext(stream.Context())
-	slog.Info("ReportPoseTelemetry: agent connected", "agent_id", agentID)
+	slog.Info("ReportPoseTelemetry: agentsdk connected", "agent_id", agentID)
 	for {
 		event, err := stream.Recv()
 		if err == io.EOF {

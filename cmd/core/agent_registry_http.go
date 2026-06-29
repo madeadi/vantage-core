@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"vantageos-core/pkg/agent"
+	"vantageos-core/pkg/agentsdk"
 )
 
 type registerRequest struct {
@@ -20,17 +20,17 @@ func (r *AgentRegistry) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /agents/register", r.handleRegister)
 }
 
-// handleRegister registers a physical agent with the registry.
+// handleRegister registers a physical agentsdk with the registry.
 //
-// @Summary     Register an agent
-// @Description Called by a physical agent on boot to register its identity and skills.
+// @Summary     Register an agentsdk
+// @Description Called by a physical agentsdk on boot to register its identity and skills.
 // @Description The request must include a pre-shared device API key as a Bearer token.
 // @Tags        agents
 // @Accept      json
 // @Produce     json
 // @Param       Authorization  header    string           true  "Bearer <device-api-key>"
 // @Param       body           body      registerRequest  true  "Agent registration payload"
-// @Success     200            {object}  agent.RegisterResponse
+// @Success     200            {object}  agentsdk.RegisterResponse
 // @Failure     400            {string}  string  "bad request"
 // @Failure     401            {string}  string  "unauthorized"
 // @Failure     500            {string}  string  "internal server error"
@@ -53,7 +53,7 @@ func (r *AgentRegistry) handleRegister(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	// device key must match the agent ID in the body
+	// device key must match the agentsdk ID in the body
 	if body.ID != agentID {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -68,7 +68,7 @@ func (r *AgentRegistry) handleRegister(w http.ResponseWriter, req *http.Request)
 	r.Register(&Agent{ID: body.ID, Name: body.Name}, token, body.Skills)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(agent.RegisterResponse{
+	json.NewEncoder(w).Encode(agentsdk.RegisterResponse{
 		AgentID:  string(agentID),
 		Token:    token,
 		GRPCAddr: r.grpcAdvertiseAddr,

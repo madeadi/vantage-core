@@ -67,6 +67,58 @@
                     }
                 }
             }
+        },
+        "/api/v1/tasks": {
+            "post": {
+                "description": "Dispatches a task to a named agent. The agent must be online and idle.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tasks"
+                ],
+                "summary": "Create a task",
+                "parameters": [
+                    {
+                        "description": "Task payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/main.createTaskRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.createTaskResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "bad request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "agent offline or busy",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal server error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -85,51 +137,26 @@
             }
         },
         "cmd_core.registerRequest": {
-            "type": "object",
-            "properties": {
-                "event_sources": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/main.EventSource"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "skills": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/main.AgentSkill"
-                    }
-                }
-            }
+            "type": "object"
         },
-        "main.AgentPayload": {
+        "main.createTaskRequest": {
             "type": "object",
             "properties": {
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "main.AgentSkill": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
                 "payload": {
-                    "$ref": "#/definitions/main.AgentPayload"
+                    "type": "object"
+                },
+                "robotId": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
                 }
             }
         },
-        "main.EventSource": {
+        "main.createTaskResponse": {
             "type": "object",
             "properties": {
-                "name": {
+                "task_id": {
                     "type": "string"
                 }
             }

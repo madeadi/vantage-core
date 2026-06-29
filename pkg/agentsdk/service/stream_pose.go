@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+	skill "vantageos-core/pkg/agentsdk/agent_skill"
 
-	skill "vantageos-core/pkg/agent_skill"
 	agentv1 "vantageos-core/proto/agent/v1"
 
 	"google.golang.org/grpc/metadata"

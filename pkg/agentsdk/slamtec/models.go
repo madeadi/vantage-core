@@ -1,6 +1,8 @@
 package slamtec
 
-import "vantageos-core/pkg/agent_skill/slamtec/action"
+import (
+	"vantageos-core/pkg/agentsdk/slamtec/action"
+)
 
 // ── POJO / shared types ───────────────────────────────────────────────────────
 

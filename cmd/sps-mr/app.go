@@ -7,8 +7,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"vantageos-core/pkg/agent/server"
-	"vantageos-core/pkg/agent/service"
+	"vantageos-core/pkg/agentsdk/server"
+	"vantageos-core/pkg/agentsdk/service"
+	"vantageos-core/pkg/agentsdk/task_handler"
 	agentv1 "vantageos-core/proto/agent/v1"
 )
 
@@ -37,12 +38,19 @@ func (a *App) Run() {
 
 	// services
 	pt := service.NewStreamPose(a.Config.AgentID, a.Robot, 500*time.Millisecond, a.Config.LayoutID)
-	st := service.NewStreamTask(a.Config.AgentID)
+
+	// Set up the task manager and streamer
+	tm := service.NewAgentTaskManager(
+		task_handler.NewGotoHandler(a.Robot),
+		task_handler.NewGoHomeHandler(a.Robot),
+	)
+	st := service.NewStreamTask(a.Config.AgentID, tm)
 
 	serverCfg := server.ConnectConfig{
 		AgentID: a.Config.AgentID,
 		Key:     a.Config.Key,
 		Name:    "SPS MR Robot",
+		Skills:  tm.Skills(),
 	}
 	for ctx.Err() == nil {
 		conn, err := a.Server.Connect(serverCfg)

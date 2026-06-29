@@ -27,7 +27,7 @@ type EnterElevatorAction struct {
 
 func NewEnterElevatorAction(elevatorID string) EnterElevatorAction {
 	return EnterElevatorAction{
-		Action:  Action{ActionName: "slamtec.agent.actions.EnterElevatorAction"},
+		Action:  Action{ActionName: "slamtec.agentsdk.actions.EnterElevatorAction"},
 		Options: defaultElevatorOptions(elevatorID),
 	}
 }
@@ -39,7 +39,7 @@ type LeaveElevatorAction struct {
 
 func NewLeaveElevatorAction(elevatorID string) LeaveElevatorAction {
 	return LeaveElevatorAction{
-		Action:  Action{ActionName: "slamtec.agent.actions.LeaveElevatorAction"},
+		Action:  Action{ActionName: "slamtec.agentsdk.actions.LeaveElevatorAction"},
 		Options: defaultElevatorOptions(elevatorID),
 	}
 }

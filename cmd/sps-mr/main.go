@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"vantageos-core/pkg/agent/server"
-	dummybot "vantageos-core/pkg/agent_skill/dummy_bot"
-	"vantageos-core/pkg/agent_skill/slamtec"
+	"vantageos-core/pkg/agentsdk/dummy_bot"
+	"vantageos-core/pkg/agentsdk/server"
+	"vantageos-core/pkg/agentsdk/slamtec"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 		return
 	}
 
-	server := &server.Server{
+	srv := &server.Server{
 		CoreURL: cfg.Url,
 	}
 
@@ -35,7 +35,7 @@ func main() {
 		robot = dummybot.New()
 	}
 
-	app := NewApp(robot, *cfg, *server)
+	app := NewApp(robot, *cfg, *srv)
 
 	fmt.Println(app)
 

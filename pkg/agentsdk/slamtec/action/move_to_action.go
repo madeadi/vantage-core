@@ -26,7 +26,7 @@ type MoveToAction struct {
 	Options MoveToActionOptions `json:"options"`
 }
 
-const moveToActionName = "slamtec.agent.actions.MultiFloorMoveAction"
+const moveToActionName = "slamtec.agentsdk.actions.MultiFloorMoveAction"
 
 // NewMoveToAction creates a default MoveToAction
 func NewMoveToAction() *MoveToAction {

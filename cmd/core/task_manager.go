@@ -1,6 +1,9 @@
 package main
 
-import "errors"
+import (
+	"errors"
+	"sync"
+)
 
 type Task struct {
 	ID        string
@@ -29,7 +32,7 @@ const (
 	TaskStatusFinished                      // 11
 )
 
-// Transient returns true if the task is in a transient state (not yet getting confirmation from the agent).
+// Transient returns true if the task is in a transient state (not yet getting confirmation from the agentsdk).
 func (t *Task) Transient() bool {
 	switch t.Status {
 	case TaskStatusUnspecified, TaskStatusDraft, TaskStatusStarting, TaskStatusExpiring, TaskStatusAborting, TaskStatusFinishing:
@@ -45,18 +48,21 @@ type TaskSender interface {
 }
 
 type TaskManager struct {
+	mu           sync.Mutex
 	sender       TaskSender
 	currentTasks map[AgentID]*Task
 }
 
-// StartTask dispatches a task to the agent via its live gRPC stream.
-// Returns an error if the agent is offline or already has a running task.
+// StartTask dispatches a task to the agentsdk via its live gRPC stream.
+// Returns an error if the agentsdk is offline or already has a running task.
 func (t *TaskManager) StartTask(task *Task) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if !t.sender.IsOnline(task.AgentID) {
-		return errors.New("cannot start task: agent is offline")
+		return errors.New("cannot start task: agentsdk is offline")
 	}
 	if _, ok := t.currentTasks[task.AgentID]; ok {
-		return errors.New("cannot start task: agent is busy")
+		return errors.New("cannot start task: agentsdk is busy")
 	}
 	t.currentTasks[task.AgentID] = task
 	return t.sender.SendTask(task)

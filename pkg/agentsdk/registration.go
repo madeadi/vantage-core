@@ -1,4 +1,4 @@
-package agent
+package agentsdk
 
 type RegisterResponse struct {
 	AgentID  string `json:"agent_id"`

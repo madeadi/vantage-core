@@ -11,7 +11,7 @@ type rotateOptions struct {
 
 func NewRotateAction(radians float64) RotateAction {
 	return RotateAction{
-		Action:  Action{ActionName: "slamtec.agent.actions.RotateAction"},
+		Action:  Action{ActionName: "slamtec.agentsdk.actions.RotateAction"},
 		Options: rotateOptions{Angle: radians},
 	}
 }

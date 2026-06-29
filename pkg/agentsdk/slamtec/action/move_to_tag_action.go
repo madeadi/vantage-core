@@ -17,12 +17,12 @@ type TagTarget struct {
 }
 
 type moveToTagConfig struct {
-	MoveOptions    tagMoveOptions `json:"move_options"`
-	TagType        int            `json:"tag_type"`
-	BackwardDocking bool          `json:"backward_docking"`
-	ReflectTagNum  int            `json:"reflect_tag_num"`
-	DockAllowance  float64        `json:"dock_allowance"`
-	ShelvesSize    []ShelfSize    `json:"shelves_size"`
+	MoveOptions     tagMoveOptions `json:"move_options"`
+	TagType         int            `json:"tag_type"`
+	BackwardDocking bool           `json:"backward_docking"`
+	ReflectTagNum   int            `json:"reflect_tag_num"`
+	DockAllowance   float64        `json:"dock_allowance"`
+	ShelvesSize     []ShelfSize    `json:"shelves_size"`
 }
 
 type tagMoveOptions struct {
@@ -37,7 +37,7 @@ type ShelfSize struct {
 
 func NewMoveToTagAction(tagX, tagY, tagYaw float64) MoveToTagAction {
 	return MoveToTagAction{
-		Action: Action{ActionName: "slamtec.agent.actions.MoveToTagAction"},
+		Action: Action{ActionName: "slamtec.agentsdk.actions.MoveToTagAction"},
 		Options: MoveToTagOptions{
 			Target: TagTarget{X: tagX, Y: tagY, Yaw: tagYaw},
 			MoveToTagConfig: moveToTagConfig{

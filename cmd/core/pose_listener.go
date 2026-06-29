@@ -8,7 +8,7 @@ import (
 )
 
 // PoseListener listens to pose telemetry events from agents.
-// It stores the historical pose data for each agent for replay and analysis.
+// It stores the historical pose data for each agentsdk for replay and analysis.
 type PoseListener struct {
 	mu      sync.Mutex
 	latest  map[AgentID]LayoutPose

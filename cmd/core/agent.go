@@ -1,5 +1,7 @@
 package main
 
+import "encoding/json"
+
 type AgentID string
 
 type Agent struct {
@@ -8,12 +10,8 @@ type Agent struct {
 }
 
 type AgentSkill struct {
-	Name    string       `json:"name"`
-	Payload AgentPayload `json:"payload"`
-}
-
-type AgentPayload struct {
-	Name string `json:"name"`
+	Name    string          `json:"name"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 type EventSource struct {
