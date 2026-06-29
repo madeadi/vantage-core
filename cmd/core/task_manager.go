@@ -134,3 +134,21 @@ func (t *TaskManager) OnAgentReconnect(agentID AgentID) {
 	slog.Info("task re-delivered after agent reconnect",
 		"agent_id", agentID, "task_id", task.ID)
 }
+
+// AckTask processes a task acknowledgement from the agent. Terminal statuses
+// clear the task slot so the agent can accept new work.
+func (t *TaskManager) AckTask(agentID AgentID, taskID string, status TaskStatus) {
+	switch status {
+	case TaskStatusFinished, TaskStatusAborted, TaskStatusFailed, TaskStatusCannotStart, TaskStatusExpired:
+		t.mu.Lock()
+		defer t.mu.Unlock()
+		if task, ok := t.currentTasks[agentID]; ok && task.ID == taskID {
+			delete(t.currentTasks, agentID)
+			if timer, ok := t.reconnectTimers[agentID]; ok {
+				timer.Stop()
+				delete(t.reconnectTimers, agentID)
+			}
+			slog.Info("task cleared", "agent_id", agentID, "task_id", taskID, "status", status)
+		}
+	}
+}
