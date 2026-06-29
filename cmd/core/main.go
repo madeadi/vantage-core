@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"time"
 
 	_ "vantageos-core/docs"
 	agentv1 "vantageos-core/proto/agent/v1"
@@ -49,7 +50,11 @@ func main() {
 
 	registry := NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
 	defer registry.Close()
-	tm := &TaskManager{sender: registry, currentTasks: make(map[AgentID]*Task)}
+	tm := &TaskManager{
+		sender:          registry,
+		currentTasks:    make(map[AgentID]*Task),
+		reconnectTimers: make(map[AgentID]*time.Timer),
+	}
 	taskHTTP := &TaskHTTP{tm: tm}
 
 	mux := http.NewServeMux()
@@ -74,6 +79,7 @@ func main() {
 		telemetry: telemetry,
 		pose:      registry,
 		layouts:   cfg.AgentLayouts,
+		taskMgr:   tm,
 	})
 	go func() {
 		slog.Info("gRPC listening", "addr", grpcListenAddr)
