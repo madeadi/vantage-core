@@ -13,6 +13,11 @@ type DummyBot struct {
 	skillChan     chan agentskill2.Result
 }
 
+func (d *DummyBot) MoveToTagWithOptions(ctx context.Context, options map[string]any) <-chan agentskill2.Result {
+	slog.Info("MoveToTagWithOptions")
+	return d.execute(ctx)
+}
+
 func (d *DummyBot) StartJackUp(ctx context.Context) <-chan agentskill2.Result {
 	slog.Info("StartJackUp")
 	return d.execute(ctx)

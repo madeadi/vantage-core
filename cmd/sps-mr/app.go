@@ -7,6 +7,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"vantageos-core/cmd/sps-mr/custom_task_handler"
 	"vantageos-core/pkg/agentsdk/server"
 	"vantageos-core/pkg/agentsdk/service"
 	"vantageos-core/pkg/agentsdk/task_handler"
@@ -40,10 +41,13 @@ func (a *App) Run() {
 	pt := service.NewStreamPose(a.Config.AgentID, a.Robot, 500*time.Millisecond, a.Config.LayoutID)
 
 	// Set up the task manager and register task handlers
+	ds := custom_task_handler.NewDeliveryService(a.Robot, a.Robot, a.Robot)
 	tm := service.NewAgentTaskManager(
 		task_handler.NewGotoHandler(a.Robot),
 		task_handler.NewGoHomeHandler(a.Robot),
 		task_handler.NewJackHandler(a.Robot),
+		custom_task_handler.NewLoadToAV(ds),
+		custom_task_handler.NewUnloadFromAV(ds),
 	)
 	st := service.NewStreamTask(a.Config.AgentID, tm)
 
