@@ -21,7 +21,7 @@ func (g GoHomeHandler) GetTaskType() string {
 }
 
 func (g GoHomeHandler) Execute(ctx context.Context, task *agentv1.Task) (result []byte, err error) {
-	var p Payload
+	var p GotoPayload
 	if err := json.Unmarshal(task.GetPayload(), &p); err != nil {
 		return nil, fmt.Errorf("invalid payload: %w", err)
 	}

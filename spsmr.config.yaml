@@ -6,7 +6,12 @@ id: 70000000-0000-0000-0000-000000000002
 key: sps-bot-2
 
 layout_id: layout1
-robot_type: dummy
+robot_type: slamtec
+
+cameras:
+  - camera_id: camera1
+    type: mjpg # can be mjpg, rtsp
+    url: http://localhost:8081/stream.mjpg
 
 slamtec:
   base_url: http://localhost

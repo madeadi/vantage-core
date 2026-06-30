@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"vantageos-core/pkg/agentsdk"
 
 	"gopkg.in/yaml.v2"
 )
@@ -19,13 +20,12 @@ type SlamtecConfig struct {
 }
 
 type Config struct {
-	Url       string    `yaml:"core_url"`
-	AgentID   string    `yaml:"id"`
-	Key       string    `yaml:"key"`
-	LayoutID  string    `yaml:"layout_id"`
-	RobotType RobotType `yaml:"robot_type"`
+	agentsdk.BaseConfig   `yaml:",inline"`
+	agentsdk.LayoutConfig `yaml:",inline"`
 
-	Slamtec SlamtecConfig `yaml:"slamtec"`
+	RobotType RobotType               `yaml:"robot_type"`
+	Slamtec   SlamtecConfig           `yaml:"slamtec"`
+	Cameras   []agentsdk.CameraConfig `yaml:"cameras"`
 }
 
 func loadConfig(path string) (*Config, error) {

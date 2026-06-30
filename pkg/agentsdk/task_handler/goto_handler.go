@@ -9,7 +9,7 @@ import (
 	agentv1 "vantageos-core/proto/agent/v1"
 )
 
-type Payload struct {
+type GotoPayload struct {
 	LocationName string  `json:"locationName"`
 	LayoutID     string  `json:"layoutId,omitempty"`
 	Yaw          float64 `json:"yaw,omitempty"`
@@ -28,7 +28,7 @@ func (g GotoHandler) GetTaskType() string {
 }
 
 func (g GotoHandler) Execute(ctx context.Context, task *agentv1.Task) ([]byte, error) {
-	var p Payload
+	var p GotoPayload
 	if err := json.Unmarshal(task.GetPayload(), &p); err != nil {
 		return nil, fmt.Errorf("invalid payload: %w", err)
 	}

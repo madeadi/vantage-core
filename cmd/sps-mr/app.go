@@ -39,10 +39,11 @@ func (a *App) Run() {
 	// services
 	pt := service.NewStreamPose(a.Config.AgentID, a.Robot, 500*time.Millisecond, a.Config.LayoutID)
 
-	// Set up the task manager and streamer
+	// Set up the task manager and register task handlers
 	tm := service.NewAgentTaskManager(
 		task_handler.NewGotoHandler(a.Robot),
 		task_handler.NewGoHomeHandler(a.Robot),
+		task_handler.NewJackHandler(a.Robot),
 	)
 	st := service.NewStreamTask(a.Config.AgentID, tm)
 

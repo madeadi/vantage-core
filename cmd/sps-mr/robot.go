@@ -8,4 +8,5 @@ type Robot interface {
 	agentskill2.RobotPoseSkill
 	agentskill2.GoToSkill
 	agentskill2.ChargingSkill
+	agentskill2.JackUpDownSkill
 }

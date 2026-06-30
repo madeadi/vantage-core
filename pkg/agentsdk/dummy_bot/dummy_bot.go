@@ -2,6 +2,7 @@ package dummybot
 
 import (
 	"context"
+	"log/slog"
 	"math/rand"
 	"time"
 	agentskill2 "vantageos-core/pkg/agentsdk/agent_skill"
@@ -12,12 +13,35 @@ type DummyBot struct {
 	skillChan     chan agentskill2.Result
 }
 
+func (d *DummyBot) StartJackUp(ctx context.Context) <-chan agentskill2.Result {
+	slog.Info("StartJackUp")
+	return d.execute(ctx)
+}
+
+func (d *DummyBot) StartJackDown(ctx context.Context) <-chan agentskill2.Result {
+	slog.Info("StartJackDown")
+	return d.execute(ctx)
+}
+
 func New() *DummyBot {
 	skillChan := make(chan agentskill2.Result, 1)
 	return &DummyBot{
 		skillDuration: 10 * time.Second,
 		skillChan:     skillChan,
 	}
+}
+
+func (d *DummyBot) execute(ctx context.Context) <-chan agentskill2.Result {
+	ch := make(chan agentskill2.Result, 1)
+	go func() {
+		select {
+		case <-time.After(d.skillDuration):
+			ch <- agentskill2.Result{Status: agentskill2.Success}
+		case <-ctx.Done():
+			ch <- agentskill2.Result{Status: agentskill2.Cancelled}
+		}
+	}()
+	return ch
 }
 
 func (d *DummyBot) GetRobotPose() agentskill2.RobotPose {
@@ -29,39 +53,21 @@ func (d *DummyBot) GetRobotPose() agentskill2.RobotPose {
 }
 
 func (d *DummyBot) GoToNamedTarget(ctx context.Context, namedTarget string, options agentskill2.GoToOption) <-chan agentskill2.Result {
-	ch := make(chan agentskill2.Result, 1)
-	go func() {
-		select {
-		case <-time.After(d.skillDuration):
-			ch <- agentskill2.Result{Status: agentskill2.Success}
-		case <-ctx.Done():
-			ch <- agentskill2.Result{Status: agentskill2.Cancelled}
-		}
-	}()
-	return ch
+	slog.Info("GoToNamedTarget")
+	return d.execute(ctx)
 }
 
 func (d *DummyBot) GoToXY(ctx context.Context, x, y, yaw float64) <-chan agentskill2.Result {
-	ch := make(chan agentskill2.Result, 1)
-	go func() {
-		select {
-		case <-time.After(d.skillDuration):
-			ch <- agentskill2.Result{Status: agentskill2.Success}
-		case <-ctx.Done():
-			ch <- agentskill2.Result{Status: agentskill2.Cancelled}
-		}
-	}()
-	return ch
+	slog.Info("GoToXY")
+	return d.execute(ctx)
 }
 
 func (d *DummyBot) StopGo(ctx context.Context) <-chan agentskill2.Result {
-	ch := make(chan agentskill2.Result, 1)
-	ch <- agentskill2.Result{Status: agentskill2.Success}
-	return ch
+	slog.Info("StopGo")
+	return d.execute(ctx)
 }
 
 func (d *DummyBot) GoChargeNearby(ctx context.Context) <-chan agentskill2.Result {
-	ch := make(chan agentskill2.Result, 1)
-	ch <- agentskill2.Result{Status: agentskill2.Success}
-	return ch
+	slog.Info("GoChargeNearby")
+	return d.execute(ctx)
 }

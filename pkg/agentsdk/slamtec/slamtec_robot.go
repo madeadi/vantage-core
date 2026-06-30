@@ -1045,50 +1045,6 @@ func (r *SlamtecRobot) StartJackDown(ctx context.Context) <-chan agentskill2.Res
 	return ch
 }
 
-// ── AdvancedJackUpDownSkill ───────────────────────────────────────────────────
-
-func (r *SlamtecRobot) JackUp(ctx context.Context, tagX, tagY, tagYaw, _, _ float64, _ []int) <-chan agentskill2.Result {
-	ch := resultCh()
-	go func() {
-		defer close(ch)
-		slog.Info("JackUp: docking under tag", "x", tagX, "y", tagY, "yaw", tagYaw)
-
-		payload := action.NewMoveToTagAction(tagX, tagY, tagYaw)
-		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
-			return
-		}
-
-		slog.Info("JackUp: docking complete, activating lift")
-		result := <-r.StartJackUp(ctx)
-		sendResult(ch, result)
-	}()
-	return ch
-}
-
-func (r *SlamtecRobot) JackDown(ctx context.Context) <-chan agentskill2.Result {
-	ch := resultCh()
-	go func() {
-		defer close(ch)
-		slog.Info("JackDown: deactivating lift then backing off")
-
-		result := <-r.StartJackDown(ctx)
-		if result.Status != agentskill2.Success {
-			sendResult(ch, result)
-			return
-		}
-
-		slog.Info("JackDown: backing off from tag")
-		payload := action.NewBackOffFromTagAction()
-		if err := r.submitAction(ctx, payload); err != nil {
-			sendResult(ch, agentskill2.Result{Err: err, Status: agentskill2.Failed})
-			return
-		}
-		sendResult(ch, agentskill2.Result{Status: agentskill2.Success})
-	}()
-	return ch
-}
-
 // ── MoveToTagSkill ────────────────────────────────────────────────────────────
 
 func (r *SlamtecRobot) MoveToTagWithOptions(ctx context.Context, options map[string]any) <-chan agentskill2.Result {
