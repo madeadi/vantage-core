@@ -10,7 +10,7 @@ robot_type: slamtec
 
 cameras:
   - camera_id: camera1
-    type: mjpg # can be mjpg, rtsp
+    type: mjpg # can be mjpg, rtsp, hls
     url: http://localhost:8081/stream.mjpg
 
 slamtec:

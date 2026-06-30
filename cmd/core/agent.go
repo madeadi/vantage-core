@@ -7,6 +7,10 @@ type AgentID string
 type Agent struct {
 	ID   AgentID `json:"id"`
 	Name string  `json:"name"`
+
+	Cameras      []Camera
+	Skills       []AgentSkill
+	EventSources []EventSource
 }
 
 type AgentSkill struct {
@@ -17,3 +21,18 @@ type AgentSkill struct {
 type EventSource struct {
 	Name string `json:"name"`
 }
+
+type Camera struct {
+	ID   string
+	Name string
+	Type CameraType
+	Url  string
+}
+
+type CameraType string
+
+const (
+	CameraTypeMJpg CameraType = "mjpg"
+	CameraTypeRtsp CameraType = "rtsp"
+	CameraTypeHls  CameraType = "hls"
+)
