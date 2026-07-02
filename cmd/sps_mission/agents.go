@@ -130,6 +130,12 @@ func (r RobotAgent) requirement() *missionv1.TaskRequirements {
 	return &missionv1.TaskRequirements{AgentId: r.AgentID}
 }
 
+func (r RobotAgent) GoTo(t *missionv1.CreateTask, location string) {
+	t.Type = TaskTypeGoto
+	t.Requirement = r.requirement()
+	t.Payload = mustJSON(GotoPayload{LocationName: location})
+}
+
 func (r RobotAgent) DeliverSingle(t *missionv1.CreateTask, from, to string) {
 	t.Type = TaskTypeDeliverSingle
 	t.Requirement = r.requirement()

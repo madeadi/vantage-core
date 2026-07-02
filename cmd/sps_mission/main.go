@@ -30,6 +30,7 @@ func main() {
 
 	handlers := map[string]DeliveryMissionHandler{
 		DeliveryTypeFromKitchen: NewMissionFromKitchen(cfg.FromKitchen, dr),
+		DeliveryTypeToKitchen:   NewMissionToKitchen(cfg.ToKitchen, dr),
 	}
 
 	app := NewApp(*cfg, srv, handlers)

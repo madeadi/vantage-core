@@ -1,25 +1,12 @@
 package main
 
 import (
-	"encoding/json"
-	"errors"
 	"log/slog"
-	"sync"
-	"time"
 
-	"vantageos-core/pkg/missionsdk"
 	missionv1 "vantageos-core/proto/mission/v1"
 )
 
-var errNoStream = errors.New("mission stream not bound yet")
-
 type FKDeliveryStatus string
-
-func (fkd FKDelivery) ToDelivery() Delivery {
-	delivery := fkd.Delivery
-	delivery.Status = string(fkd.Status)
-	return delivery
-}
 
 const (
 	// ==================== FROM_KITCHEN Flow ====================
@@ -112,12 +99,6 @@ const (
 	FKDeliveryStatusCancelled FKDeliveryStatus = "CANCELLED"
 )
 
-type FKDelivery struct {
-	Delivery
-
-	Status FKDeliveryStatus
-}
-
 // FKPhase identifies which step of the FROM_KITCHEN_V2 flow a task
 // belongs to. Echoed back verbatim on TaskSchema.mission_context so
 // HandleTaskUpdate knows which branch to run next.
@@ -145,35 +126,20 @@ const (
 	FKReturnHome           FKPhase = "FK_RETURN_HOME"
 )
 
-// DeliveryMissionHandler drives a single delivery type's task-creation state
-// machine over its bound mission stream.
-type DeliveryMissionHandler interface {
-	Type() string
-	Start(delivery Delivery) error
-	Bind(stream *missionsdk.MissionStream)
-	HandleTaskUpdate(update *missionv1.TaskStatusUpdate)
-}
-
 type MissionFromKitchen struct {
-	vehicle VehicleAgent
-	gate    GateAgent
-	lift    LiftAgent
-	kRobot  RobotAgent
-	iRobot  RobotAgent
-	dr      DeliveryRepository
-
-	mu     sync.Mutex
-	stream *missionsdk.MissionStream
+	MissionBase
 }
 
 func NewMissionFromKitchen(cfg FromKitchenConfig, dr DeliveryRepository) *MissionFromKitchen {
 	return &MissionFromKitchen{
-		vehicle: VehicleAgent{AgentID: cfg.VehicleID},
-		gate:    GateAgent{AgentID: cfg.GateID},
-		lift:    LiftAgent{AgentID: cfg.LiftID},
-		kRobot:  RobotAgent{AgentID: cfg.KitchenRobotID},
-		iRobot:  RobotAgent{AgentID: cfg.InstitutionRobotID},
-		dr:      dr,
+		MissionBase: MissionBase{
+			vehicle: VehicleAgent{AgentID: cfg.VehicleID},
+			gate:    GateAgent{AgentID: cfg.GateID},
+			lift:    LiftAgent{AgentID: cfg.LiftID},
+			kRobot:  RobotAgent{AgentID: cfg.KitchenRobotID},
+			iRobot:  RobotAgent{AgentID: cfg.InstitutionRobotID},
+			dr:      dr,
+		},
 	}
 }
 
@@ -181,46 +147,13 @@ func (m *MissionFromKitchen) Type() string {
 	return DeliveryTypeFromKitchen
 }
 
-// Bind attaches the (re)connected mission stream this handler should send
-// tasks on. Called by app.go every time the underlying gRPC stream reconnects.
-func (m *MissionFromKitchen) Bind(stream *missionsdk.MissionStream) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.stream = stream
-}
-
-// taskFactory builds the shared envelope for a task belonging to delivery,
-// tagged with the step it represents. Mirrors Java's taskFactory: the caller
-// fills in Type/Payload/Requirement via one of the agent builders.
+// taskFactory wraps the base with FKPhase typing for call-site ergonomics.
 func (m *MissionFromKitchen) taskFactory(delivery Delivery, phase FKPhase) *missionv1.CreateTask {
-	payload := map[string]interface{}{
-		"phase": phase,
-	}
-	ctx, err := json.Marshal(payload)
-	if err != nil {
-		slog.Error("failed to marshal task context", "delivery_id", delivery.ID, "phase", phase, "err", err)
-		return nil
-	}
-
-	mc := &missionv1.MissionContext{
-		Id:      delivery.ID,
-		Context: ctx,
-	}
-
-	return &missionv1.CreateTask{
-		MissionContext: mc,
-	}
+	return m.MissionBase.taskFactory(delivery, string(phase))
 }
 
-func (m *MissionFromKitchen) send(ts *missionv1.CreateTask) error {
-	m.mu.Lock()
-	stream := m.stream
-	m.mu.Unlock()
-
-	if stream == nil {
-		return errNoStream
-	}
-	return stream.CreateTask(ts)
+func (m *MissionFromKitchen) updateDeliveryStatus(delivery Delivery, status FKDeliveryStatus) Delivery {
+	return m.MissionBase.updateDeliveryStatus(delivery, string(status))
 }
 
 func (m *MissionFromKitchen) Start(delivery Delivery) error {
@@ -232,37 +165,10 @@ func (m *MissionFromKitchen) Start(delivery Delivery) error {
 	return m.send(ts)
 }
 
-// HandleTaskUpdate is the mission stream's onStatusUpdate callback. It always
-// re-reads the delivery from the repository before deciding the next step —
-// no in-memory pending-task cache — so concurrent deliveries never cross-talk.
 func (m *MissionFromKitchen) HandleTaskUpdate(update *missionv1.TaskStatusUpdate) {
-	delivery, err := m.dr.FindDeliveryByID(update.GetMissionContext().GetId())
-	if err != nil {
-		slog.Error("HandleTaskUpdate: delivery not found", "mission_id", update.GetMissionContext().GetId(), "err", err)
-		return
-	}
-
-	switch FKDeliveryStatus(delivery.Status) {
-	case FKDeliveryStatusCancelled, FKDeliveryStatusDone, FKDeliveryStatusFailed:
-		slog.Info("ignoring task update for terminal delivery", "delivery_id", delivery.ID, "status", delivery.Status)
-		return
-	}
-
-	switch update.Status {
-	case missionv1.MissionTaskStatus_MISSION_TASK_STATUS_FAILED:
-		m.fail(delivery, "task "+update.GetTaskContext().GetId()+" ended with status FAILED")
-	case missionv1.MissionTaskStatus_MISSION_TASK_STATUS_COMPLETED:
-		var payload map[string]interface{}
-		if err := json.Unmarshal(update.MissionContext.Context, &payload); err != nil {
-			slog.Error("failed to unmarshal task context", "task_id", update.TaskContext.Id, "err", err)
-			return
-		}
-		phase := FKPhase(payload["phase"].(string))
-		m.handleFinishedTask(delivery, phase)
-
-	default:
-		slog.Info("task status not handled", "task_id", update.TaskContext.Id, "status", update.Status)
-	}
+	m.handleTaskUpdate(update, string(FKDeliveryStatusFailed), func(delivery Delivery, phase string) {
+		m.handleFinishedTask(delivery, FKPhase(phase))
+	})
 }
 
 func (m *MissionFromKitchen) handleFinishedTask(delivery Delivery, phase FKPhase) {
@@ -381,30 +287,5 @@ func (m *MissionFromKitchen) handleFinishedTask(delivery Delivery, phase FKPhase
 
 	default:
 		slog.Warn("unknown task context", "context", phase, "delivery_id", delivery.ID)
-	}
-}
-
-func (m *MissionFromKitchen) sendOrLog(ts *missionv1.CreateTask) {
-	if err := m.send(ts); err != nil {
-		slog.Error("failed to send task", "mission_context", ts.MissionContext, "err", err)
-	}
-}
-
-func (m *MissionFromKitchen) updateDeliveryStatus(delivery Delivery, status FKDeliveryStatus) Delivery {
-	delivery.Status = string(status)
-	delivery.UpdatedAt = time.Now()
-	if err := m.dr.UpdateDelivery(delivery); err != nil {
-		slog.Error("failed to persist delivery status", "delivery_id", delivery.ID, "status", status, "err", err)
-	}
-	return delivery
-}
-
-func (m *MissionFromKitchen) fail(delivery Delivery, reason string) {
-	slog.Info("failing delivery from kitchen", "delivery_id", delivery.ID, "reason", reason)
-	delivery.Status = string(FKDeliveryStatusFailed)
-	delivery.FailureReason = reason
-	delivery.UpdatedAt = time.Now()
-	if err := m.dr.UpdateDelivery(delivery); err != nil {
-		slog.Error("failed to persist delivery failure", "delivery_id", delivery.ID, "err", err)
 	}
 }
