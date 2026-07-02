@@ -17,13 +17,16 @@ Central server and agent SDK for Vantage OS. Manages robot agent registration, t
 # Build everything
 go build ./...
 
-# Run core server (hot reload requires air)
-make dev-core
+# Run individual components (hot reload requires air)
+make dev-core        # core server
+make dev-smallbot    # reference agent
+make dev-sps-mr      # SPS mobile robot agent
+make dev-sps-mission # SPS food delivery mission runner
 
-# Run reference agent
-make dev-smallbot
+# Run the full SPS stack (core + sps-mr + sps-mission) in parallel
+make dev-sps
 
-# Or run directly
+# Or run directly without hot reload
 go run ./cmd/core -config core.config.yaml
 go run ./cmd/smallbot -config smallbot.config.yaml
 ```
