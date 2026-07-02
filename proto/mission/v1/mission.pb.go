@@ -243,7 +243,6 @@ func (*MissionServerMessage_CreateTaskResponse) isMissionServerMessage_Payload()
 type MissionContext struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Context       []byte                 `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
-	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"` // the id in mission handler database, e.g. "mission-123"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -283,13 +282,6 @@ func (x *MissionContext) GetContext() []byte {
 		return x.Context
 	}
 	return nil
-}
-
-func (x *MissionContext) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
 }
 
 type TaskContext struct {
@@ -648,10 +640,9 @@ const file_proto_mission_v1_mission_proto_rawDesc = "" +
 	"\x14MissionServerMessage\x12L\n" +
 	"\x12task_status_update\x18\x01 \x01(\v2\x1c.mission.v1.TaskStatusUpdateH\x00R\x10taskStatusUpdate\x12R\n" +
 	"\x14create_task_response\x18\x02 \x01(\v2\x1e.mission.v1.CreateTaskResponseH\x00R\x12createTaskResponseB\t\n" +
-	"\apayload\":\n" +
+	"\apayload\"*\n" +
 	"\x0eMissionContext\x12\x18\n" +
-	"\acontext\x18\x01 \x01(\fR\acontext\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\"5\n" +
+	"\acontext\x18\x01 \x01(\fR\acontext\"5\n" +
 	"\vTaskContext\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06output\x18\x02 \x01(\fR\x06output\"-\n" +

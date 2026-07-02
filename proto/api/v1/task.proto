@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "vantageos-core/proto/api/v1;apiv1";
+
+service TaskService {
+    rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+    rpc FindTask(FindTaskRequest)     returns (FindTaskResponse);
+    rpc ListTasks(ListTasksRequest)   returns (ListTasksResponse);
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+
+enum TaskStatus {
+    TASK_STATUS_UNSPECIFIED   = 0;
+    TASK_STATUS_DRAFT         = 1;
+    TASK_STATUS_STARTING      = 2;
+    TASK_STATUS_CANNOT_START  = 3;
+    TASK_STATUS_STARTED       = 4;
+    TASK_STATUS_EXPIRING      = 5;
+    TASK_STATUS_EXPIRED       = 6;
+    TASK_STATUS_ABORTING      = 7;
+    TASK_STATUS_ABORTED       = 8;
+    TASK_STATUS_FAILED        = 9;
+    TASK_STATUS_FINISHING     = 10;
+    TASK_STATUS_FINISHED      = 11;
+}
+
+// ── Core message ───────────────────────────────────────────────────────────
+
+message Task {
+    string id       = 1;
+    string agent_id = 2;
+    string type     = 3; // e.g. "GO_TO", "GO_HOME"
+    google.protobuf.Struct payload = 4;
+    google.protobuf.Struct result  = 5;
+
+    TaskStatus status = 6;
+
+    // Mission linkage — both empty when task is standalone
+    string mission_id         = 7;
+    string mission_context_id = 8;
+    bytes  mission_context    = 9;
+
+    // Lifecycle timestamps
+    google.protobuf.Timestamp received_at  = 10;
+    google.protobuf.Timestamp start_at     = 11;
+    google.protobuf.Timestamp to_expire_at = 12;
+}
+
+// ── CreateTask ─────────────────────────────────────────────────────────────
+
+message CreateTaskRequest {
+    string agent_id = 1;
+    string type     = 2;
+    google.protobuf.Struct payload = 3;
+    // Optional: task will be expired if not started within this time
+    google.protobuf.Timestamp to_expire_at = 4;
+}
+
+message CreateTaskResponse {
+    string task_id = 1;
+}
+
+// ── FindTask ───────────────────────────────────────────────────────────────
+
+message FindTaskRequest {
+    string id = 1;
+}
+
+message FindTaskResponse {
+    Task task = 1;
+}
+
+// ── ListTasks ──────────────────────────────────────────────────────────────
+
+message ListTasksRequest {
+    // Optional filters
+    string agent_id = 1;
+
+    int32  page_size  = 2;
+    string page_token = 3;
+}
+
+message ListTasksResponse {
+    repeated Task tasks       = 1;
+    string        next_page_token = 2;
+}

@@ -20,6 +20,7 @@ import (
 	"vantageos-core/internal/core/repository"
 	"vantageos-core/internal/core/service"
 	agentv1 "vantageos-core/proto/agent/v1"
+	"vantageos-core/proto/api/v1/apiv1connect"
 	missionv1 "vantageos-core/proto/mission/v1"
 
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -71,13 +72,17 @@ func main() {
 
 	ui := NewUI(ar, tRepo, mr, poseListener)
 
-	taskHTTP := controller2.NewTaskHTTP(dispatcher)
+	taskPath, taskHandler := apiv1connect.NewTaskServiceHandler(controller2.NewTaskConnectHandler(dispatcher))
+	agentPath, agentHandler := apiv1connect.NewAgentServiceHandler(controller2.NewAgentConnectHandler(ar))
+	missionPath, missionHandler := apiv1connect.NewMissionServiceHandler(controller2.NewMissionConnectHandler(mr))
 
 	mux := http.NewServeMux()
 	ac.RegisterRoutes(mux)
 	ui.RegisterUIRoutes(mux)
 	mc.RegisterRoutes(mux)
-	taskHTTP.RegisterRoutes(mux)
+	mux.Handle(taskPath, taskHandler)
+	mux.Handle(agentPath, agentHandler)
+	mux.Handle(missionPath, missionHandler)
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 
 	// gRPC server

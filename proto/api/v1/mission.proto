@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "vantageos-core/proto/api/v1;apiv1";
+
+service MissionService {
+    rpc ListMissions(ListMissionsRequest) returns (ListMissionsResponse);
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+
+enum MissionStatus {
+    MISSION_STATUS_UNSPECIFIED = 0;
+    MISSION_STATUS_PENDING     = 1;
+    MISSION_STATUS_ACCEPTED    = 2;
+    MISSION_STATUS_REJECTED    = 3;
+    MISSION_STATUS_RUNNING     = 4;
+    MISSION_STATUS_COMPLETED   = 5;
+    MISSION_STATUS_FAILED      = 6;
+}
+
+// ── Messages ───────────────────────────────────────────────────────────────
+
+message Mission {
+    string        id     = 1;
+    string        name   = 2;
+    bool          online = 3;
+    MissionStatus status = 4;
+}
+
+// ── ListMissions ───────────────────────────────────────────────────────────
+
+message ListMissionsRequest {}
+
+message ListMissionsResponse {
+    repeated Mission missions = 1;
+}

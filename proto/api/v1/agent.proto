@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "vantageos-core/proto/api/v1;apiv1";
+
+service AgentService {
+    rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+
+enum CameraType {
+    CAMERA_TYPE_UNSPECIFIED = 0;
+    CAMERA_TYPE_MJPG        = 1;
+    CAMERA_TYPE_RTSP        = 2;
+    CAMERA_TYPE_WEBRTC      = 3;
+}
+
+// ── Messages ───────────────────────────────────────────────────────────────
+
+message AgentSkill {
+    string                 name    = 1;
+    google.protobuf.Struct payload = 2;
+}
+
+message Camera {
+    string     camera_id = 1;
+    CameraType type      = 2;
+    string     url       = 3;
+}
+
+message Agent {
+    string id     = 1;
+    string name   = 2;
+    bool   online = 3;
+
+    repeated AgentSkill skills  = 4;
+    repeated Camera     cameras = 5;
+}
+
+// ── ListAgents ─────────────────────────────────────────────────────────────
+
+message ListAgentsRequest {}
+
+message ListAgentsResponse {
+    repeated Agent agents = 1;
+}

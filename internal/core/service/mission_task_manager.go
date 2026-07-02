@@ -26,14 +26,13 @@ func (c *MissionTaskManager) OnCreateTask(missionID string, ct *missionPb.Create
 
 	// build the task and send it to the agent
 	task := &model.Task{
-		ID:               taskID,
-		AgentID:          model.AgentID(ct.Requirement.AgentId),
-		Type:             ct.Type,
-		Payload:          ct.Payload,
-		Status:           model.TaskStatusDraft,
-		MissionID:        missionID,
-		MissionContextID: ct.MissionContext.Id,
-		MissionContext:   ct.MissionContext.Context,
+		ID:             taskID,
+		AgentID:        model.AgentID(ct.Requirement.AgentId),
+		Type:           ct.Type,
+		Payload:        ct.Payload,
+		Status:         model.TaskStatusDraft,
+		MissionID:      missionID,
+		MissionContext: ct.MissionContext.Context,
 	}
 
 	if err := c.dispatcher.SendTask(task); err != nil {
@@ -83,7 +82,6 @@ func (c *MissionTaskManager) OnTaskUpdated(ack *agentPb.TaskAck) {
 			Payload: &missionPb.MissionServerMessage_TaskStatusUpdate{
 				TaskStatusUpdate: &missionPb.TaskStatusUpdate{
 					MissionContext: &missionPb.MissionContext{
-						Id:      found.MissionContextID,
 						Context: found.MissionContext,
 					},
 					Status: found.MissionTaskStatus(),

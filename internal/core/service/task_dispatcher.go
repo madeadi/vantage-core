@@ -61,6 +61,10 @@ func (d *TaskDispatcher) OnReconnect(agentID model.AgentID) {
 	}
 }
 
+func (d *TaskDispatcher) FindTask(taskID string) (*model.Task, error) {
+	return d.taskRepo.GetTaskByID(taskID)
+}
+
 func (d *TaskDispatcher) ListTasks(agentID model.AgentID) []*model.Task {
 	return d.taskRepo.ListTasks(agentID)
 }

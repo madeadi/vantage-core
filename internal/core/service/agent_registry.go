@@ -119,6 +119,12 @@ func (r *AgentRegistry) GetCameras(agentID model.AgentID) []agentsdk.CameraConfi
 	return r.cameras[agentID]
 }
 
+func (r *AgentRegistry) SkillsFor(agentID model.AgentID) []model.AgentSkill {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.skills[agentID]
+}
+
 func (r *AgentRegistry) AllowedAgents() []AllowedAgent {
 	return r.allowedAgents
 }

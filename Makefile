@@ -18,5 +18,12 @@ dev-sps:
 proto:
 	protoc --go_out=. --go_opt=paths=source_relative \
 	       --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	       -I . \
 	       proto/agent/v1/agent.proto \
 	       proto/mission/v1/mission.proto
+	protoc --go_out=. --go_opt=paths=source_relative \
+	       --connect-go_out=. --connect-go_opt=paths=source_relative \
+	       -I . \
+	       proto/api/v1/task.proto \
+	       proto/api/v1/agent.proto \
+	       proto/api/v1/mission.proto
