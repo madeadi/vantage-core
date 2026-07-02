@@ -3,17 +3,17 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["-config", "core.config.yaml"]
+  args_bin = ["-config", "cmd/core/core.config.yaml"]
   bin = "./tmp/core"
   cmd = "go build -o ./tmp/core ./cmd/core"
   delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "cmd/smallbot"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []
   exclude_regex = ["_test.go"]
   exclude_unchanged = false
   follow_symlinks = false
   full_bin = ""
-  include_dir = []
+  include_dir = ["cmd/core", "pkg/core"]
   include_ext = ["go", "tpl", "tmpl", "html", "yaml"]
   include_file = []
   kill_delay = "0s"

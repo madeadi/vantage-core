@@ -1,6 +1,8 @@
-package main
+package model
 
-import "time"
+import (
+	"time"
+)
 
 type LayoutPose struct {
 	AgentID   AgentID

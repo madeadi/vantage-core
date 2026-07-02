@@ -56,6 +56,7 @@ func (a *App) Run() {
 		Key:     a.Config.Key,
 		Name:    "SPS MR Robot",
 		Skills:  tm.Skills(),
+		Cameras: a.Config.Cameras,
 	}
 	for ctx.Err() == nil {
 		conn, err := a.Server.Connect(serverCfg)

@@ -4,88 +4,36 @@ package mission.v1;
 
 option go_package = "vantageos-core/proto/mission/v1;missionv1";
 
-import "google/protobuf/timestamp.proto";
-
 service MissionService {
     rpc StreamMission(stream MissionClientMessage) returns (stream MissionServerMessage);
 }
 
-// client --> server
 
 message MissionClientMessage {
     oneof payload {
-        StartMission start       = 1;
-        EndMission   end         = 2;
-        CreateTask   create_task = 3;
+        CreateTask   create_task = 1;
+        AbortTask    abort_task = 2;
     }
 }
-
-message StartMission {
-    string                    mission_id = 1; // client-generated, e.g. UUID
-    string                    name       = 2;
-    google.protobuf.Timestamp end_time   = 3;
-}
-
-message EndMission {
-    string reason = 1;
-}
-
-message CreateTask {
-    string task_type = 1;
-    bytes  payload   = 2;
-
-    oneof assignment {
-        TaskRequirements requirements = 3; // core picks a matching agent
-        string           agent_id     = 4; // mission pins a specific agent
-    }
-}
-
-message TaskRequirements {
-    repeated string skills = 1;
-}
-
-// server --> client
 
 message MissionServerMessage {
     oneof payload {
-        MissionReady     mission_ready     = 1; // resources have been allocated
-        MissionRejected  mission_rejected  = 2;
-        TaskAccepted     task_accepted     = 3;
-        TaskStatusUpdate task_status_update = 4;
-        MissionEnded     mission_ended     = 5; // resources have been released
+        TaskStatusUpdate task_status_update = 1;
+        CreateTaskResponse create_task_response = 2;
     }
 }
 
-message MissionReady {
-    bool              resumed = 1; // true if reconnecting to an existing session
-    repeated TaskSnapshot tasks = 2; // in-flight tasks, populated on resume
+message MissionContext {
+    bytes context = 1;
 }
 
-message MissionRejected {
-    string reason = 1; // e.g. "agents unavailable"
+message TaskContext {
+    string id = 1; // server generated task id
+    bytes output = 2; // optional execution results
 }
 
-message TaskAccepted {
-    string task_id  = 1; // server-generated task ID
-    string agent_id = 2; // agent assigned to the task
-}
-
-message TaskStatusUpdate {
-    string            task_id  = 1; // server-generated task ID
-    string            agent_id = 2;
-    MissionTaskStatus status   = 3;
-    string            message  = 4; // optional detail, e.g. error reason
-    bytes             output   = 5; // raw output bytes
-}
-
-message MissionEnded {
-    string reason = 1; // optional reason for mission termination
-}
-
-message TaskSnapshot {
-    string            task_id  = 1;
-    string            agent_id = 2;
-    MissionTaskStatus status   = 3;
+message TaskRequirements {
+    string agent_id  = 1; // mission pins a specific agent
 }
 
 enum MissionTaskStatus {
@@ -94,4 +42,35 @@ enum MissionTaskStatus {
     MISSION_TASK_STATUS_IN_PROGRESS = 2;
     MISSION_TASK_STATUS_COMPLETED   = 3;
     MISSION_TASK_STATUS_FAILED      = 4;
+}
+
+// Client messages
+message CreateTask {
+    // Task
+    string type = 1; // e.g. "GO_TO", "GO_HOME"
+    bytes payload = 2; // will match task schema payload
+
+    // To be received back from the server during status update
+    MissionContext mission_context = 3;
+
+    // Requirements for the task to be executed, e.g. a specific agent or a specific robot type
+    TaskRequirements requirement = 4;
+}
+
+message AbortTask {
+    string task_id = 1;
+}
+
+// server messages
+message CreateTaskResponse {
+    MissionContext mission_context = 1;
+    MissionTaskStatus status = 2;
+    string task_id = 3;
+}
+
+message TaskStatusUpdate {
+    MissionContext mission_context = 1;
+    MissionTaskStatus status = 2;
+    TaskContext task_context = 3;
+    string message = 4; // optional message from the server
 }

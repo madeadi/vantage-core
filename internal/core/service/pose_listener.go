@@ -1,9 +1,10 @@
-package main
+package service
 
 import (
 	"context"
 	"sync"
 	"time"
+	"vantageos-core/internal/core/model"
 	agentv1 "vantageos-core/proto/agent/v1"
 )
 
@@ -11,16 +12,16 @@ import (
 // It stores the historical pose data for each agentsdk for replay and analysis.
 type PoseListener struct {
 	mu      sync.Mutex
-	latest  map[AgentID]LayoutPose
-	history map[AgentID][]LayoutPose
+	latest  map[model.AgentID]model.LayoutPose
+	history map[model.AgentID][]model.LayoutPose
 
 	keepFor time.Duration
 }
 
 func NewPoseListener(keepFor time.Duration) *PoseListener {
 	return &PoseListener{
-		latest:  make(map[AgentID]LayoutPose),
-		history: make(map[AgentID][]LayoutPose),
+		latest:  make(map[model.AgentID]model.LayoutPose),
+		history: make(map[model.AgentID][]model.LayoutPose),
 		keepFor: keepFor,
 	}
 }
@@ -38,11 +39,11 @@ func (p *PoseListener) Run(ctx context.Context) {
 	}
 }
 
-func (p *PoseListener) OnPoseUpdate(agentID AgentID, event *agentv1.PoseTelemetryEvent) {
+func (p *PoseListener) OnPoseUpdate(agentID model.AgentID, event *agentv1.PoseTelemetryEvent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	p.latest[agentID] = LayoutPose{
+	p.latest[agentID] = model.LayoutPose{
 		AgentID:   agentID,
 		LayoutID:  event.LayoutId,
 		X:         event.X,
@@ -53,17 +54,17 @@ func (p *PoseListener) OnPoseUpdate(agentID AgentID, event *agentv1.PoseTelemetr
 	p.history[agentID] = append(p.history[agentID], p.latest[agentID])
 }
 
-func (p *PoseListener) GetLatestPose(agentID AgentID) LayoutPose {
+func (p *PoseListener) GetLatestPose(agentID model.AgentID) model.LayoutPose {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.latest[agentID]
 }
 
-func (p *PoseListener) GetHistory(agentID AgentID) []LayoutPose {
+func (p *PoseListener) GetHistory(agentID model.AgentID) []model.LayoutPose {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	src := p.history[agentID]
-	out := make([]LayoutPose, len(src))
+	out := make([]model.LayoutPose, len(src))
 	copy(out, src)
 	return out
 }
@@ -74,7 +75,7 @@ func (p *PoseListener) cleanHistory() {
 	defer p.mu.Unlock()
 
 	for agentID, poses := range p.history {
-		var filtered []LayoutPose
+		var filtered []model.LayoutPose
 		for _, pose := range poses {
 			if time.Since(pose.Timestamp) < p.keepFor {
 				filtered = append(filtered, pose)

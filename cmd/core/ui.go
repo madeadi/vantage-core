@@ -8,43 +8,68 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+	"vantageos-core/internal/core/model"
+	"vantageos-core/internal/core/repository"
+	"vantageos-core/internal/core/service"
+	"vantageos-core/pkg/agentsdk"
 )
 
 //go:embed web
 var webFS embed.FS
 
 type AgentWithPose struct {
-	Agent
-	Pose LayoutPose
+	model.Agent
+	Pose    model.LayoutPose
+	Cameras []agentsdk.CameraConfig
 }
 
 type TaskView struct {
-	ID          string
-	Type        string
-	Status      TaskStatus
-	AgentName   string
-	ReceivedAt  time.Time
+	ID         string
+	Type       string
+	Status     model.TaskStatus
+	AgentName  string
+	ReceivedAt time.Time
 }
 
 type RegistryStats struct {
-	ConnectedAgents int             `json:"connected_agents"`
-	TotalAgents     int             `json:"total_agents"`
-	Agents          []AgentWithPose `json:"agents"`
-	RecentTasks     []TaskView      `json:"recent_tasks"`
+	ConnectedAgents   int                   `json:"connected_agents"`
+	TotalAgents       int                   `json:"total_agents"`
+	Agents            []AgentWithPose       `json:"agents"`
+	RecentTasks       []TaskView            `json:"recent_tasks"`
+	ConnectedMissions int                   `json:"connected_missions"`
+	TotalMissions     int                   `json:"total_missions"`
+	Missions          []service.MissionInfo `json:"missions"`
 }
 
-func (r *AgentRegistry) Stats() RegistryStats {
+type UI struct {
+	mu           sync.RWMutex
+	ar           *service.AgentRegistry
+	taskRepo     repository.TaskRepo
+	mr           *service.MissionRegistry
+	poseListener *service.PoseListener
+}
+
+func NewUI(ar *service.AgentRegistry, taskRepo repository.TaskRepo, mr *service.MissionRegistry, poseListener *service.PoseListener) *UI {
+	return &UI{ar: ar, taskRepo: taskRepo, mr: mr, poseListener: poseListener}
+}
+
+func (r *UI) Stats() RegistryStats {
 	r.mu.RLock()
-	agents := make([]AgentWithPose, 0, len(r.onlineAgents))
-	for _, a := range r.onlineAgents {
+
+	onlineAgents := r.ar.OnlineAgents()
+
+	agents := make([]AgentWithPose, 0, len(onlineAgents))
+	for _, a := range onlineAgents {
 		agents = append(agents, AgentWithPose{
-			Agent: *a,
-			Pose:  r.poseListener.GetLatestPose(a.ID),
+			Agent:   *a,
+			Pose:    r.poseListener.GetLatestPose(a.ID),
+			Cameras: r.ar.GetCameras(a.ID),
 		})
 	}
-	connected := len(r.onlineAgents)
-	total := len(r.allowedAgents)
+	connected := len(onlineAgents)
+	total := len(r.ar.AllowedAgents())
 	r.mu.RUnlock()
 
 	all := r.taskRepo.ListTasks("")
@@ -60,26 +85,37 @@ func (r *AgentRegistry) Stats() RegistryStats {
 			ID:         t.ID,
 			Type:       t.Type,
 			Status:     t.Status,
-			AgentName:  r.nameFor(t.AgentID),
+			AgentName:  r.ar.NameFor(t.AgentID),
 			ReceivedAt: t.ReceivedAt,
 		})
 	}
 
+	missions := r.mr.ListMissions()
+	connectedMissions := 0
+	for _, m := range missions {
+		if m.Online {
+			connectedMissions++
+		}
+	}
+
 	return RegistryStats{
-		ConnectedAgents: connected,
-		TotalAgents:     total,
-		Agents:          agents,
-		RecentTasks:     tasks,
+		ConnectedAgents:   connected,
+		TotalAgents:       total,
+		Agents:            agents,
+		RecentTasks:       tasks,
+		ConnectedMissions: connectedMissions,
+		TotalMissions:     len(missions),
+		Missions:          missions,
 	}
 }
 
-func (r *AgentRegistry) RegisterUIRoutes(mux *http.ServeMux) {
+func (r *UI) RegisterUIRoutes(mux *http.ServeMux) {
 	sub, _ := fs.Sub(webFS, "web")
 	mux.HandleFunc("GET /ui/events", r.handleSSE)
 	mux.Handle("/ui/", http.StripPrefix("/ui", http.FileServer(http.FS(sub))))
 }
 
-func (r *AgentRegistry) handleSSE(w http.ResponseWriter, req *http.Request) {
+func (r *UI) handleSSE(w http.ResponseWriter, req *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -108,53 +144,77 @@ func (r *AgentRegistry) handleSSE(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func taskStatusLabel(s TaskStatus) string {
+func taskStatusLabel(s model.TaskStatus) string {
 	switch s {
-	case TaskStatusDraft:
+	case model.TaskStatusDraft:
 		return "draft"
-	case TaskStatusStarting:
+	case model.TaskStatusStarting:
 		return "starting"
-	case TaskStatusCannotStart:
+	case model.TaskStatusCannotStart:
 		return "cannot start"
-	case TaskStatusStarted:
+	case model.TaskStatusStarted:
 		return "started"
-	case TaskStatusExpiring:
+	case model.TaskStatusExpiring:
 		return "expiring"
-	case TaskStatusExpired:
+	case model.TaskStatusExpired:
 		return "expired"
-	case TaskStatusAborting:
+	case model.TaskStatusAborting:
 		return "aborting"
-	case TaskStatusAborted:
+	case model.TaskStatusAborted:
 		return "aborted"
-	case TaskStatusFailed:
+	case model.TaskStatusFailed:
 		return "failed"
-	case TaskStatusFinishing:
+	case model.TaskStatusFinishing:
 		return "finishing"
-	case TaskStatusFinished:
+	case model.TaskStatusFinished:
 		return "finished"
 	default:
 		return "—"
 	}
 }
 
-func taskStatusClass(s TaskStatus) string {
+func taskStatusClass(s model.TaskStatus) string {
 	switch s {
-	case TaskStatusStarted, TaskStatusFinishing, TaskStatusFinished:
+	case model.TaskStatusStarted, model.TaskStatusFinishing, model.TaskStatusFinished:
 		return "status-ok"
-	case TaskStatusFailed, TaskStatusExpired, TaskStatusAborted, TaskStatusCannotStart:
+	case model.TaskStatusFailed, model.TaskStatusExpired, model.TaskStatusAborted, model.TaskStatusCannotStart:
 		return "status-err"
-	case TaskStatusStarting, TaskStatusExpiring, TaskStatusAborting:
+	case model.TaskStatusStarting, model.TaskStatusExpiring, model.TaskStatusAborting:
 		return "status-warn"
 	default:
 		return "status-dim"
 	}
 }
 
+// buildCamerasHTML renders thumbnails for an agent's mjpg cameras.
+// rtsp and webrtc cameras aren't playable directly in an <img> tag, so they're skipped for now.
+func buildCamerasHTML(cameras []agentsdk.CameraConfig) string {
+	var b strings.Builder
+	hasMJpg := false
+	for _, c := range cameras {
+		if c.Type != agentsdk.CameraTypeMJpg {
+			continue
+		}
+		if !hasMJpg {
+			b.WriteString(`<div class="agent-cameras">`)
+			hasMJpg = true
+		}
+		fmt.Fprintf(&b,
+			`<img class="camera-feed" src="%s" alt="%s" loading="lazy">`,
+			html.EscapeString(c.Url), html.EscapeString(c.CameraID),
+		)
+	}
+	if hasMJpg {
+		b.WriteString(`</div>`)
+	}
+	return b.String()
+}
+
 func buildStatsFragment(s RegistryStats) string {
 	var b strings.Builder
 	fmt.Fprintf(&b,
-		`<div class="grid"><div class="card"><div class="card-value">%d</div><div class="card-label">Agents Connected</div></div><div class="card"><div class="card-value">%d</div><div class="card-label">Agents Registered</div></div></div>`,
-		s.ConnectedAgents, s.TotalAgents,
+		`<div class="grid"><div class="card"><div class="card-value">%d</div><div class="card-label">Agents Connected</div></div><div class="card"><div class="card-value">%d</div><div class="card-label">Agents Registered</div></div><div class="card"><div class="card-value">%d</div><div class="card-label">Missions Online</div></div><div class="card"><div class="card-value">%d</div><div class="card-label">Missions Registered</div></div></div>`,
+		s.ConnectedAgents, s.TotalAgents, s.ConnectedMissions, s.TotalMissions,
 	)
 	b.WriteString(`<div class="columns">`)
 
@@ -175,8 +235,30 @@ func buildStatsFragment(s RegistryStats) string {
 				)
 			}
 			fmt.Fprintf(&b,
-				`<li class="agent-item"><span class="dot"></span><span class="agent-name">%s</span>%s</li>`,
-				html.EscapeString(a.Name), poseStr,
+				`<li class="agent-item"><div class="agent-item-header"><span class="dot"></span><span class="agent-name">%s</span>%s</div>%s</li>`,
+				html.EscapeString(a.Name), poseStr, buildCamerasHTML(a.Cameras),
+			)
+		}
+		b.WriteString(`</ul>`)
+	}
+
+	b.WriteString(`<p class="section-title" style="margin-top:1.5rem">Missions</p>`)
+	if len(s.Missions) == 0 {
+		b.WriteString(`<p class="empty">No missions registered</p>`)
+	} else {
+		b.WriteString(`<ul class="agent-list">`)
+		for _, m := range s.Missions {
+			dotClass := "dot"
+			if !m.Online {
+				dotClass = "dot dot-offline"
+			}
+			name := m.Name
+			if name == "" {
+				name = string(m.ID)
+			}
+			fmt.Fprintf(&b,
+				`<li class="agent-item"><div class="agent-item-header"><span class="%s"></span><span class="agent-name">%s</span></div></li>`,
+				dotClass, html.EscapeString(name),
 			)
 		}
 		b.WriteString(`</ul>`)

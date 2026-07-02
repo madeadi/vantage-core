@@ -1,13 +1,13 @@
-package main
+package model
 
 type MissionID string
+type MissionHandlerID string
 
 type Mission struct {
-	ID        MissionID
-	HandlerID MissionHandlerID
-	Name      string
-	Tasks     []Task
-	Status    MissionStatus
+	ID     string
+	Name   string
+	Tasks  []Task
+	Status MissionStatus
 }
 
 type MissionStatus string

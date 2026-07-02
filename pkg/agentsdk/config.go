@@ -19,6 +19,7 @@ type CameraConfig struct {
 type CameraType string
 
 const (
-	CameraTypeMJpg CameraType = "mjpg"
-	CameraTypeRtsp CameraType = "rtsp"
+	CameraTypeMJpg   CameraType = "mjpg"
+	CameraTypeRtsp   CameraType = "rtsp"
+	CameraTypeWebRtc CameraType = "webrtc"
 )

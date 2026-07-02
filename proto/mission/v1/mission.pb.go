@@ -9,7 +9,6 @@ package missionv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -81,9 +80,8 @@ type MissionClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Payload:
 	//
-	//	*MissionClientMessage_Start
-	//	*MissionClientMessage_End
 	//	*MissionClientMessage_CreateTask
+	//	*MissionClientMessage_AbortTask
 	Payload       isMissionClientMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -126,24 +124,6 @@ func (x *MissionClientMessage) GetPayload() isMissionClientMessage_Payload {
 	return nil
 }
 
-func (x *MissionClientMessage) GetStart() *StartMission {
-	if x != nil {
-		if x, ok := x.Payload.(*MissionClientMessage_Start); ok {
-			return x.Start
-		}
-	}
-	return nil
-}
-
-func (x *MissionClientMessage) GetEnd() *EndMission {
-	if x != nil {
-		if x, ok := x.Payload.(*MissionClientMessage_End); ok {
-			return x.End
-		}
-	}
-	return nil
-}
-
 func (x *MissionClientMessage) GetCreateTask() *CreateTask {
 	if x != nil {
 		if x, ok := x.Payload.(*MissionClientMessage_CreateTask); ok {
@@ -153,160 +133,57 @@ func (x *MissionClientMessage) GetCreateTask() *CreateTask {
 	return nil
 }
 
-type isMissionClientMessage_Payload interface {
-	isMissionClientMessage_Payload()
-}
-
-type MissionClientMessage_Start struct {
-	Start *StartMission `protobuf:"bytes,1,opt,name=start,proto3,oneof"`
-}
-
-type MissionClientMessage_End struct {
-	End *EndMission `protobuf:"bytes,2,opt,name=end,proto3,oneof"`
-}
-
-type MissionClientMessage_CreateTask struct {
-	CreateTask *CreateTask `protobuf:"bytes,3,opt,name=create_task,json=createTask,proto3,oneof"`
-}
-
-func (*MissionClientMessage_Start) isMissionClientMessage_Payload() {}
-
-func (*MissionClientMessage_End) isMissionClientMessage_Payload() {}
-
-func (*MissionClientMessage_CreateTask) isMissionClientMessage_Payload() {}
-
-type StartMission struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MissionId     string                 `protobuf:"bytes,1,opt,name=mission_id,json=missionId,proto3" json:"mission_id,omitempty"` // client-generated, e.g. UUID
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	EndTime       *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *StartMission) Reset() {
-	*x = StartMission{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StartMission) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StartMission) ProtoMessage() {}
-
-func (x *StartMission) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[1]
+func (x *MissionClientMessage) GetAbortTask() *AbortTask {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
+		if x, ok := x.Payload.(*MissionClientMessage_AbortTask); ok {
+			return x.AbortTask
 		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StartMission.ProtoReflect.Descriptor instead.
-func (*StartMission) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *StartMission) GetMissionId() string {
-	if x != nil {
-		return x.MissionId
-	}
-	return ""
-}
-
-func (x *StartMission) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *StartMission) GetEndTime() *timestamppb.Timestamp {
-	if x != nil {
-		return x.EndTime
 	}
 	return nil
 }
 
-type EndMission struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+type isMissionClientMessage_Payload interface {
+	isMissionClientMessage_Payload()
 }
 
-func (x *EndMission) Reset() {
-	*x = EndMission{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
+type MissionClientMessage_CreateTask struct {
+	CreateTask *CreateTask `protobuf:"bytes,1,opt,name=create_task,json=createTask,proto3,oneof"`
 }
 
-func (x *EndMission) String() string {
-	return protoimpl.X.MessageStringOf(x)
+type MissionClientMessage_AbortTask struct {
+	AbortTask *AbortTask `protobuf:"bytes,2,opt,name=abort_task,json=abortTask,proto3,oneof"`
 }
 
-func (*EndMission) ProtoMessage() {}
+func (*MissionClientMessage_CreateTask) isMissionClientMessage_Payload() {}
 
-func (x *EndMission) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
+func (*MissionClientMessage_AbortTask) isMissionClientMessage_Payload() {}
 
-// Deprecated: Use EndMission.ProtoReflect.Descriptor instead.
-func (*EndMission) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *EndMission) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
-}
-
-type CreateTask struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	TaskType string                 `protobuf:"bytes,1,opt,name=task_type,json=taskType,proto3" json:"task_type,omitempty"`
-	Payload  []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	// Types that are valid to be assigned to Assignment:
+type MissionServerMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Payload:
 	//
-	//	*CreateTask_Requirements
-	//	*CreateTask_AgentId
-	Assignment    isCreateTask_Assignment `protobuf_oneof:"assignment"`
+	//	*MissionServerMessage_TaskStatusUpdate
+	//	*MissionServerMessage_CreateTaskResponse
+	Payload       isMissionServerMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CreateTask) Reset() {
-	*x = CreateTask{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[3]
+func (x *MissionServerMessage) Reset() {
+	*x = MissionServerMessage{}
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CreateTask) String() string {
+func (x *MissionServerMessage) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateTask) ProtoMessage() {}
+func (*MissionServerMessage) ProtoMessage() {}
 
-func (x *CreateTask) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[3]
+func (x *MissionServerMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -317,69 +194,159 @@ func (x *CreateTask) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CreateTask.ProtoReflect.Descriptor instead.
-func (*CreateTask) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use MissionServerMessage.ProtoReflect.Descriptor instead.
+func (*MissionServerMessage) Descriptor() ([]byte, []int) {
+	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *CreateTask) GetTaskType() string {
-	if x != nil {
-		return x.TaskType
-	}
-	return ""
-}
-
-func (x *CreateTask) GetPayload() []byte {
+func (x *MissionServerMessage) GetPayload() isMissionServerMessage_Payload {
 	if x != nil {
 		return x.Payload
 	}
 	return nil
 }
 
-func (x *CreateTask) GetAssignment() isCreateTask_Assignment {
+func (x *MissionServerMessage) GetTaskStatusUpdate() *TaskStatusUpdate {
 	if x != nil {
-		return x.Assignment
-	}
-	return nil
-}
-
-func (x *CreateTask) GetRequirements() *TaskRequirements {
-	if x != nil {
-		if x, ok := x.Assignment.(*CreateTask_Requirements); ok {
-			return x.Requirements
+		if x, ok := x.Payload.(*MissionServerMessage_TaskStatusUpdate); ok {
+			return x.TaskStatusUpdate
 		}
 	}
 	return nil
 }
 
-func (x *CreateTask) GetAgentId() string {
+func (x *MissionServerMessage) GetCreateTaskResponse() *CreateTaskResponse {
 	if x != nil {
-		if x, ok := x.Assignment.(*CreateTask_AgentId); ok {
-			return x.AgentId
+		if x, ok := x.Payload.(*MissionServerMessage_CreateTaskResponse); ok {
+			return x.CreateTaskResponse
 		}
+	}
+	return nil
+}
+
+type isMissionServerMessage_Payload interface {
+	isMissionServerMessage_Payload()
+}
+
+type MissionServerMessage_TaskStatusUpdate struct {
+	TaskStatusUpdate *TaskStatusUpdate `protobuf:"bytes,1,opt,name=task_status_update,json=taskStatusUpdate,proto3,oneof"`
+}
+
+type MissionServerMessage_CreateTaskResponse struct {
+	CreateTaskResponse *CreateTaskResponse `protobuf:"bytes,2,opt,name=create_task_response,json=createTaskResponse,proto3,oneof"`
+}
+
+func (*MissionServerMessage_TaskStatusUpdate) isMissionServerMessage_Payload() {}
+
+func (*MissionServerMessage_CreateTaskResponse) isMissionServerMessage_Payload() {}
+
+type MissionContext struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Context       []byte                 `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"` // the id in mission handler database, e.g. "mission-123"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MissionContext) Reset() {
+	*x = MissionContext{}
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MissionContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MissionContext) ProtoMessage() {}
+
+func (x *MissionContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MissionContext.ProtoReflect.Descriptor instead.
+func (*MissionContext) Descriptor() ([]byte, []int) {
+	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *MissionContext) GetContext() []byte {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *MissionContext) GetId() string {
+	if x != nil {
+		return x.Id
 	}
 	return ""
 }
 
-type isCreateTask_Assignment interface {
-	isCreateTask_Assignment()
+type TaskContext struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`         // server generated task id
+	Output        []byte                 `protobuf:"bytes,2,opt,name=output,proto3" json:"output,omitempty"` // optional execution results
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-type CreateTask_Requirements struct {
-	Requirements *TaskRequirements `protobuf:"bytes,3,opt,name=requirements,proto3,oneof"` // core picks a matching agent
+func (x *TaskContext) Reset() {
+	*x = TaskContext{}
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
 }
 
-type CreateTask_AgentId struct {
-	AgentId string `protobuf:"bytes,4,opt,name=agent_id,json=agentId,proto3,oneof"` // mission pins a specific agent
+func (x *TaskContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CreateTask_Requirements) isCreateTask_Assignment() {}
+func (*TaskContext) ProtoMessage() {}
 
-func (*CreateTask_AgentId) isCreateTask_Assignment() {}
+func (x *TaskContext) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskContext.ProtoReflect.Descriptor instead.
+func (*TaskContext) Descriptor() ([]byte, []int) {
+	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *TaskContext) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *TaskContext) GetOutput() []byte {
+	if x != nil {
+		return x.Output
+	}
+	return nil
+}
 
 type TaskRequirements struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Skills        []string               `protobuf:"bytes,1,rep,name=skills,proto3" json:"skills,omitempty"`
+	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"` // mission pins a specific agent
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -414,305 +381,203 @@ func (*TaskRequirements) Descriptor() ([]byte, []int) {
 	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *TaskRequirements) GetSkills() []string {
-	if x != nil {
-		return x.Skills
-	}
-	return nil
-}
-
-type MissionServerMessage struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Payload:
-	//
-	//	*MissionServerMessage_MissionReady
-	//	*MissionServerMessage_MissionRejected
-	//	*MissionServerMessage_TaskAccepted
-	//	*MissionServerMessage_TaskStatusUpdate
-	//	*MissionServerMessage_MissionEnded
-	Payload       isMissionServerMessage_Payload `protobuf_oneof:"payload"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MissionServerMessage) Reset() {
-	*x = MissionServerMessage{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MissionServerMessage) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MissionServerMessage) ProtoMessage() {}
-
-func (x *MissionServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MissionServerMessage.ProtoReflect.Descriptor instead.
-func (*MissionServerMessage) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *MissionServerMessage) GetPayload() isMissionServerMessage_Payload {
-	if x != nil {
-		return x.Payload
-	}
-	return nil
-}
-
-func (x *MissionServerMessage) GetMissionReady() *MissionReady {
-	if x != nil {
-		if x, ok := x.Payload.(*MissionServerMessage_MissionReady); ok {
-			return x.MissionReady
-		}
-	}
-	return nil
-}
-
-func (x *MissionServerMessage) GetMissionRejected() *MissionRejected {
-	if x != nil {
-		if x, ok := x.Payload.(*MissionServerMessage_MissionRejected); ok {
-			return x.MissionRejected
-		}
-	}
-	return nil
-}
-
-func (x *MissionServerMessage) GetTaskAccepted() *TaskAccepted {
-	if x != nil {
-		if x, ok := x.Payload.(*MissionServerMessage_TaskAccepted); ok {
-			return x.TaskAccepted
-		}
-	}
-	return nil
-}
-
-func (x *MissionServerMessage) GetTaskStatusUpdate() *TaskStatusUpdate {
-	if x != nil {
-		if x, ok := x.Payload.(*MissionServerMessage_TaskStatusUpdate); ok {
-			return x.TaskStatusUpdate
-		}
-	}
-	return nil
-}
-
-func (x *MissionServerMessage) GetMissionEnded() *MissionEnded {
-	if x != nil {
-		if x, ok := x.Payload.(*MissionServerMessage_MissionEnded); ok {
-			return x.MissionEnded
-		}
-	}
-	return nil
-}
-
-type isMissionServerMessage_Payload interface {
-	isMissionServerMessage_Payload()
-}
-
-type MissionServerMessage_MissionReady struct {
-	MissionReady *MissionReady `protobuf:"bytes,1,opt,name=mission_ready,json=missionReady,proto3,oneof"` // resources have been allocated
-}
-
-type MissionServerMessage_MissionRejected struct {
-	MissionRejected *MissionRejected `protobuf:"bytes,2,opt,name=mission_rejected,json=missionRejected,proto3,oneof"`
-}
-
-type MissionServerMessage_TaskAccepted struct {
-	TaskAccepted *TaskAccepted `protobuf:"bytes,3,opt,name=task_accepted,json=taskAccepted,proto3,oneof"`
-}
-
-type MissionServerMessage_TaskStatusUpdate struct {
-	TaskStatusUpdate *TaskStatusUpdate `protobuf:"bytes,4,opt,name=task_status_update,json=taskStatusUpdate,proto3,oneof"`
-}
-
-type MissionServerMessage_MissionEnded struct {
-	MissionEnded *MissionEnded `protobuf:"bytes,5,opt,name=mission_ended,json=missionEnded,proto3,oneof"` // resources have been released
-}
-
-func (*MissionServerMessage_MissionReady) isMissionServerMessage_Payload() {}
-
-func (*MissionServerMessage_MissionRejected) isMissionServerMessage_Payload() {}
-
-func (*MissionServerMessage_TaskAccepted) isMissionServerMessage_Payload() {}
-
-func (*MissionServerMessage_TaskStatusUpdate) isMissionServerMessage_Payload() {}
-
-func (*MissionServerMessage_MissionEnded) isMissionServerMessage_Payload() {}
-
-type MissionReady struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Resumed       bool                   `protobuf:"varint,1,opt,name=resumed,proto3" json:"resumed,omitempty"` // true if reconnecting to an existing session
-	Tasks         []*TaskSnapshot        `protobuf:"bytes,2,rep,name=tasks,proto3" json:"tasks,omitempty"`      // in-flight tasks, populated on resume
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MissionReady) Reset() {
-	*x = MissionReady{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MissionReady) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MissionReady) ProtoMessage() {}
-
-func (x *MissionReady) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MissionReady.ProtoReflect.Descriptor instead.
-func (*MissionReady) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *MissionReady) GetResumed() bool {
-	if x != nil {
-		return x.Resumed
-	}
-	return false
-}
-
-func (x *MissionReady) GetTasks() []*TaskSnapshot {
-	if x != nil {
-		return x.Tasks
-	}
-	return nil
-}
-
-type MissionRejected struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"` // e.g. "agents unavailable"
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MissionRejected) Reset() {
-	*x = MissionRejected{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MissionRejected) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MissionRejected) ProtoMessage() {}
-
-func (x *MissionRejected) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MissionRejected.ProtoReflect.Descriptor instead.
-func (*MissionRejected) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *MissionRejected) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
-}
-
-type TaskAccepted struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`    // server-generated task ID
-	AgentId       string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"` // agent assigned to the task
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TaskAccepted) Reset() {
-	*x = TaskAccepted{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TaskAccepted) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TaskAccepted) ProtoMessage() {}
-
-func (x *TaskAccepted) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TaskAccepted.ProtoReflect.Descriptor instead.
-func (*TaskAccepted) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *TaskAccepted) GetTaskId() string {
-	if x != nil {
-		return x.TaskId
-	}
-	return ""
-}
-
-func (x *TaskAccepted) GetAgentId() string {
+func (x *TaskRequirements) GetAgentId() string {
 	if x != nil {
 		return x.AgentId
 	}
 	return ""
 }
 
-type TaskStatusUpdate struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"` // server-generated task ID
-	AgentId       string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	Status        MissionTaskStatus      `protobuf:"varint,3,opt,name=status,proto3,enum=mission.v1.MissionTaskStatus" json:"status,omitempty"`
-	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"` // optional detail, e.g. error reason
-	Output        []byte                 `protobuf:"bytes,5,opt,name=output,proto3" json:"output,omitempty"`   // raw output bytes
+// Client messages
+type CreateTask struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Task
+	Type    string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`       // e.g. "GO_TO", "GO_HOME"
+	Payload []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"` // will match task schema payload
+	// To be received back from the server during status update
+	MissionContext *MissionContext `protobuf:"bytes,3,opt,name=mission_context,json=missionContext,proto3" json:"mission_context,omitempty"`
+	// Requirements for the task to be executed, e.g. a specific agent or a specific robot type
+	Requirement   *TaskRequirements `protobuf:"bytes,4,opt,name=requirement,proto3" json:"requirement,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
+func (x *CreateTask) Reset() {
+	*x = CreateTask{}
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTask) ProtoMessage() {}
+
+func (x *CreateTask) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTask.ProtoReflect.Descriptor instead.
+func (*CreateTask) Descriptor() ([]byte, []int) {
+	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CreateTask) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *CreateTask) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *CreateTask) GetMissionContext() *MissionContext {
+	if x != nil {
+		return x.MissionContext
+	}
+	return nil
+}
+
+func (x *CreateTask) GetRequirement() *TaskRequirements {
+	if x != nil {
+		return x.Requirement
+	}
+	return nil
+}
+
+type AbortTask struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AbortTask) Reset() {
+	*x = AbortTask{}
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AbortTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AbortTask) ProtoMessage() {}
+
+func (x *AbortTask) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AbortTask.ProtoReflect.Descriptor instead.
+func (*AbortTask) Descriptor() ([]byte, []int) {
+	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *AbortTask) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+// server messages
+type CreateTaskResponse struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MissionContext *MissionContext        `protobuf:"bytes,1,opt,name=mission_context,json=missionContext,proto3" json:"mission_context,omitempty"`
+	Status         MissionTaskStatus      `protobuf:"varint,2,opt,name=status,proto3,enum=mission.v1.MissionTaskStatus" json:"status,omitempty"`
+	TaskId         string                 `protobuf:"bytes,3,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CreateTaskResponse) Reset() {
+	*x = CreateTaskResponse{}
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateTaskResponse) ProtoMessage() {}
+
+func (x *CreateTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateTaskResponse.ProtoReflect.Descriptor instead.
+func (*CreateTaskResponse) Descriptor() ([]byte, []int) {
+	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CreateTaskResponse) GetMissionContext() *MissionContext {
+	if x != nil {
+		return x.MissionContext
+	}
+	return nil
+}
+
+func (x *CreateTaskResponse) GetStatus() MissionTaskStatus {
+	if x != nil {
+		return x.Status
+	}
+	return MissionTaskStatus_MISSION_TASK_STATUS_UNSPECIFIED
+}
+
+func (x *CreateTaskResponse) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+type TaskStatusUpdate struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MissionContext *MissionContext        `protobuf:"bytes,1,opt,name=mission_context,json=missionContext,proto3" json:"mission_context,omitempty"`
+	Status         MissionTaskStatus      `protobuf:"varint,2,opt,name=status,proto3,enum=mission.v1.MissionTaskStatus" json:"status,omitempty"`
+	TaskContext    *TaskContext           `protobuf:"bytes,3,opt,name=task_context,json=taskContext,proto3" json:"task_context,omitempty"`
+	Message        string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"` // optional message from the server
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
 func (x *TaskStatusUpdate) Reset() {
 	*x = TaskStatusUpdate{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[9]
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -724,7 +589,7 @@ func (x *TaskStatusUpdate) String() string {
 func (*TaskStatusUpdate) ProtoMessage() {}
 
 func (x *TaskStatusUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[9]
+	mi := &file_proto_mission_v1_mission_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -737,21 +602,14 @@ func (x *TaskStatusUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskStatusUpdate.ProtoReflect.Descriptor instead.
 func (*TaskStatusUpdate) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{9}
+	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *TaskStatusUpdate) GetTaskId() string {
+func (x *TaskStatusUpdate) GetMissionContext() *MissionContext {
 	if x != nil {
-		return x.TaskId
+		return x.MissionContext
 	}
-	return ""
-}
-
-func (x *TaskStatusUpdate) GetAgentId() string {
-	if x != nil {
-		return x.AgentId
-	}
-	return ""
+	return nil
 }
 
 func (x *TaskStatusUpdate) GetStatus() MissionTaskStatus {
@@ -761,6 +619,13 @@ func (x *TaskStatusUpdate) GetStatus() MissionTaskStatus {
 	return MissionTaskStatus_MISSION_TASK_STATUS_UNSPECIFIED
 }
 
+func (x *TaskStatusUpdate) GetTaskContext() *TaskContext {
+	if x != nil {
+		return x.TaskContext
+	}
+	return nil
+}
+
 func (x *TaskStatusUpdate) GetMessage() string {
 	if x != nil {
 		return x.Message
@@ -768,174 +633,47 @@ func (x *TaskStatusUpdate) GetMessage() string {
 	return ""
 }
 
-func (x *TaskStatusUpdate) GetOutput() []byte {
-	if x != nil {
-		return x.Output
-	}
-	return nil
-}
-
-type MissionEnded struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"` // optional reason for mission termination
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *MissionEnded) Reset() {
-	*x = MissionEnded{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MissionEnded) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MissionEnded) ProtoMessage() {}
-
-func (x *MissionEnded) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use MissionEnded.ProtoReflect.Descriptor instead.
-func (*MissionEnded) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *MissionEnded) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
-}
-
-type TaskSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	AgentId       string                 `protobuf:"bytes,2,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
-	Status        MissionTaskStatus      `protobuf:"varint,3,opt,name=status,proto3,enum=mission.v1.MissionTaskStatus" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TaskSnapshot) Reset() {
-	*x = TaskSnapshot{}
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TaskSnapshot) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TaskSnapshot) ProtoMessage() {}
-
-func (x *TaskSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_mission_v1_mission_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TaskSnapshot.ProtoReflect.Descriptor instead.
-func (*TaskSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_mission_v1_mission_proto_rawDescGZIP(), []int{11}
-}
-
-func (x *TaskSnapshot) GetTaskId() string {
-	if x != nil {
-		return x.TaskId
-	}
-	return ""
-}
-
-func (x *TaskSnapshot) GetAgentId() string {
-	if x != nil {
-		return x.AgentId
-	}
-	return ""
-}
-
-func (x *TaskSnapshot) GetStatus() MissionTaskStatus {
-	if x != nil {
-		return x.Status
-	}
-	return MissionTaskStatus_MISSION_TASK_STATUS_UNSPECIFIED
-}
-
 var File_proto_mission_v1_mission_proto protoreflect.FileDescriptor
 
 const file_proto_mission_v1_mission_proto_rawDesc = "" +
 	"\n" +
 	"\x1eproto/mission/v1/mission.proto\x12\n" +
-	"mission.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xba\x01\n" +
-	"\x14MissionClientMessage\x120\n" +
-	"\x05start\x18\x01 \x01(\v2\x18.mission.v1.StartMissionH\x00R\x05start\x12*\n" +
-	"\x03end\x18\x02 \x01(\v2\x16.mission.v1.EndMissionH\x00R\x03end\x129\n" +
-	"\vcreate_task\x18\x03 \x01(\v2\x16.mission.v1.CreateTaskH\x00R\n" +
-	"createTaskB\t\n" +
-	"\apayload\"x\n" +
-	"\fStartMission\x12\x1d\n" +
+	"mission.v1\"\x94\x01\n" +
+	"\x14MissionClientMessage\x129\n" +
+	"\vcreate_task\x18\x01 \x01(\v2\x16.mission.v1.CreateTaskH\x00R\n" +
+	"createTask\x126\n" +
 	"\n" +
-	"mission_id\x18\x01 \x01(\tR\tmissionId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x125\n" +
-	"\bend_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\aendTime\"$\n" +
+	"abort_task\x18\x02 \x01(\v2\x15.mission.v1.AbortTaskH\x00R\tabortTaskB\t\n" +
+	"\apayload\"\xc3\x01\n" +
+	"\x14MissionServerMessage\x12L\n" +
+	"\x12task_status_update\x18\x01 \x01(\v2\x1c.mission.v1.TaskStatusUpdateH\x00R\x10taskStatusUpdate\x12R\n" +
+	"\x14create_task_response\x18\x02 \x01(\v2\x1e.mission.v1.CreateTaskResponseH\x00R\x12createTaskResponseB\t\n" +
+	"\apayload\":\n" +
+	"\x0eMissionContext\x12\x18\n" +
+	"\acontext\x18\x01 \x01(\fR\acontext\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"5\n" +
+	"\vTaskContext\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06output\x18\x02 \x01(\fR\x06output\"-\n" +
+	"\x10TaskRequirements\x12\x19\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\"\xbf\x01\n" +
 	"\n" +
-	"EndMission\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xb2\x01\n" +
-	"\n" +
-	"CreateTask\x12\x1b\n" +
-	"\ttask_type\x18\x01 \x01(\tR\btaskType\x12\x18\n" +
-	"\apayload\x18\x02 \x01(\fR\apayload\x12B\n" +
-	"\frequirements\x18\x03 \x01(\v2\x1c.mission.v1.TaskRequirementsH\x00R\frequirements\x12\x1b\n" +
-	"\bagent_id\x18\x04 \x01(\tH\x00R\aagentIdB\f\n" +
-	"\n" +
-	"assignment\"*\n" +
-	"\x10TaskRequirements\x12\x16\n" +
-	"\x06skills\x18\x01 \x03(\tR\x06skills\"\xfc\x02\n" +
-	"\x14MissionServerMessage\x12?\n" +
-	"\rmission_ready\x18\x01 \x01(\v2\x18.mission.v1.MissionReadyH\x00R\fmissionReady\x12H\n" +
-	"\x10mission_rejected\x18\x02 \x01(\v2\x1b.mission.v1.MissionRejectedH\x00R\x0fmissionRejected\x12?\n" +
-	"\rtask_accepted\x18\x03 \x01(\v2\x18.mission.v1.TaskAcceptedH\x00R\ftaskAccepted\x12L\n" +
-	"\x12task_status_update\x18\x04 \x01(\v2\x1c.mission.v1.TaskStatusUpdateH\x00R\x10taskStatusUpdate\x12?\n" +
-	"\rmission_ended\x18\x05 \x01(\v2\x18.mission.v1.MissionEndedH\x00R\fmissionEndedB\t\n" +
-	"\apayload\"X\n" +
-	"\fMissionReady\x12\x18\n" +
-	"\aresumed\x18\x01 \x01(\bR\aresumed\x12.\n" +
-	"\x05tasks\x18\x02 \x03(\v2\x18.mission.v1.TaskSnapshotR\x05tasks\")\n" +
-	"\x0fMissionRejected\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"B\n" +
-	"\fTaskAccepted\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x19\n" +
-	"\bagent_id\x18\x02 \x01(\tR\aagentId\"\xaf\x01\n" +
-	"\x10TaskStatusUpdate\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x19\n" +
-	"\bagent_id\x18\x02 \x01(\tR\aagentId\x125\n" +
-	"\x06status\x18\x03 \x01(\x0e2\x1d.mission.v1.MissionTaskStatusR\x06status\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\tR\amessage\x12\x16\n" +
-	"\x06output\x18\x05 \x01(\fR\x06output\"&\n" +
-	"\fMissionEnded\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"y\n" +
-	"\fTaskSnapshot\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x19\n" +
-	"\bagent_id\x18\x02 \x01(\tR\aagentId\x125\n" +
-	"\x06status\x18\x03 \x01(\x0e2\x1d.mission.v1.MissionTaskStatusR\x06status*\xc2\x01\n" +
+	"CreateTask\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12\x18\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\x12C\n" +
+	"\x0fmission_context\x18\x03 \x01(\v2\x1a.mission.v1.MissionContextR\x0emissionContext\x12>\n" +
+	"\vrequirement\x18\x04 \x01(\v2\x1c.mission.v1.TaskRequirementsR\vrequirement\"$\n" +
+	"\tAbortTask\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\xa9\x01\n" +
+	"\x12CreateTaskResponse\x12C\n" +
+	"\x0fmission_context\x18\x01 \x01(\v2\x1a.mission.v1.MissionContextR\x0emissionContext\x125\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x1d.mission.v1.MissionTaskStatusR\x06status\x12\x17\n" +
+	"\atask_id\x18\x03 \x01(\tR\x06taskId\"\xe4\x01\n" +
+	"\x10TaskStatusUpdate\x12C\n" +
+	"\x0fmission_context\x18\x01 \x01(\v2\x1a.mission.v1.MissionContextR\x0emissionContext\x125\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x1d.mission.v1.MissionTaskStatusR\x06status\x12:\n" +
+	"\ftask_context\x18\x03 \x01(\v2\x17.mission.v1.TaskContextR\vtaskContext\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage*\xc2\x01\n" +
 	"\x11MissionTaskStatus\x12#\n" +
 	"\x1fMISSION_TASK_STATUS_UNSPECIFIED\x10\x00\x12 \n" +
 	"\x1cMISSION_TASK_STATUS_ACCEPTED\x10\x01\x12#\n" +
@@ -958,44 +696,38 @@ func file_proto_mission_v1_mission_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_mission_v1_mission_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_mission_v1_mission_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_proto_mission_v1_mission_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_mission_v1_mission_proto_goTypes = []any{
-	(MissionTaskStatus)(0),        // 0: mission.v1.MissionTaskStatus
-	(*MissionClientMessage)(nil),  // 1: mission.v1.MissionClientMessage
-	(*StartMission)(nil),          // 2: mission.v1.StartMission
-	(*EndMission)(nil),            // 3: mission.v1.EndMission
-	(*CreateTask)(nil),            // 4: mission.v1.CreateTask
-	(*TaskRequirements)(nil),      // 5: mission.v1.TaskRequirements
-	(*MissionServerMessage)(nil),  // 6: mission.v1.MissionServerMessage
-	(*MissionReady)(nil),          // 7: mission.v1.MissionReady
-	(*MissionRejected)(nil),       // 8: mission.v1.MissionRejected
-	(*TaskAccepted)(nil),          // 9: mission.v1.TaskAccepted
-	(*TaskStatusUpdate)(nil),      // 10: mission.v1.TaskStatusUpdate
-	(*MissionEnded)(nil),          // 11: mission.v1.MissionEnded
-	(*TaskSnapshot)(nil),          // 12: mission.v1.TaskSnapshot
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
+	(MissionTaskStatus)(0),       // 0: mission.v1.MissionTaskStatus
+	(*MissionClientMessage)(nil), // 1: mission.v1.MissionClientMessage
+	(*MissionServerMessage)(nil), // 2: mission.v1.MissionServerMessage
+	(*MissionContext)(nil),       // 3: mission.v1.MissionContext
+	(*TaskContext)(nil),          // 4: mission.v1.TaskContext
+	(*TaskRequirements)(nil),     // 5: mission.v1.TaskRequirements
+	(*CreateTask)(nil),           // 6: mission.v1.CreateTask
+	(*AbortTask)(nil),            // 7: mission.v1.AbortTask
+	(*CreateTaskResponse)(nil),   // 8: mission.v1.CreateTaskResponse
+	(*TaskStatusUpdate)(nil),     // 9: mission.v1.TaskStatusUpdate
 }
 var file_proto_mission_v1_mission_proto_depIdxs = []int32{
-	2,  // 0: mission.v1.MissionClientMessage.start:type_name -> mission.v1.StartMission
-	3,  // 1: mission.v1.MissionClientMessage.end:type_name -> mission.v1.EndMission
-	4,  // 2: mission.v1.MissionClientMessage.create_task:type_name -> mission.v1.CreateTask
-	13, // 3: mission.v1.StartMission.end_time:type_name -> google.protobuf.Timestamp
-	5,  // 4: mission.v1.CreateTask.requirements:type_name -> mission.v1.TaskRequirements
-	7,  // 5: mission.v1.MissionServerMessage.mission_ready:type_name -> mission.v1.MissionReady
-	8,  // 6: mission.v1.MissionServerMessage.mission_rejected:type_name -> mission.v1.MissionRejected
-	9,  // 7: mission.v1.MissionServerMessage.task_accepted:type_name -> mission.v1.TaskAccepted
-	10, // 8: mission.v1.MissionServerMessage.task_status_update:type_name -> mission.v1.TaskStatusUpdate
-	11, // 9: mission.v1.MissionServerMessage.mission_ended:type_name -> mission.v1.MissionEnded
-	12, // 10: mission.v1.MissionReady.tasks:type_name -> mission.v1.TaskSnapshot
-	0,  // 11: mission.v1.TaskStatusUpdate.status:type_name -> mission.v1.MissionTaskStatus
-	0,  // 12: mission.v1.TaskSnapshot.status:type_name -> mission.v1.MissionTaskStatus
-	1,  // 13: mission.v1.MissionService.StreamMission:input_type -> mission.v1.MissionClientMessage
-	6,  // 14: mission.v1.MissionService.StreamMission:output_type -> mission.v1.MissionServerMessage
-	14, // [14:15] is the sub-list for method output_type
-	13, // [13:14] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	6,  // 0: mission.v1.MissionClientMessage.create_task:type_name -> mission.v1.CreateTask
+	7,  // 1: mission.v1.MissionClientMessage.abort_task:type_name -> mission.v1.AbortTask
+	9,  // 2: mission.v1.MissionServerMessage.task_status_update:type_name -> mission.v1.TaskStatusUpdate
+	8,  // 3: mission.v1.MissionServerMessage.create_task_response:type_name -> mission.v1.CreateTaskResponse
+	3,  // 4: mission.v1.CreateTask.mission_context:type_name -> mission.v1.MissionContext
+	5,  // 5: mission.v1.CreateTask.requirement:type_name -> mission.v1.TaskRequirements
+	3,  // 6: mission.v1.CreateTaskResponse.mission_context:type_name -> mission.v1.MissionContext
+	0,  // 7: mission.v1.CreateTaskResponse.status:type_name -> mission.v1.MissionTaskStatus
+	3,  // 8: mission.v1.TaskStatusUpdate.mission_context:type_name -> mission.v1.MissionContext
+	0,  // 9: mission.v1.TaskStatusUpdate.status:type_name -> mission.v1.MissionTaskStatus
+	4,  // 10: mission.v1.TaskStatusUpdate.task_context:type_name -> mission.v1.TaskContext
+	1,  // 11: mission.v1.MissionService.StreamMission:input_type -> mission.v1.MissionClientMessage
+	2,  // 12: mission.v1.MissionService.StreamMission:output_type -> mission.v1.MissionServerMessage
+	12, // [12:13] is the sub-list for method output_type
+	11, // [11:12] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_proto_mission_v1_mission_proto_init() }
@@ -1004,20 +736,12 @@ func file_proto_mission_v1_mission_proto_init() {
 		return
 	}
 	file_proto_mission_v1_mission_proto_msgTypes[0].OneofWrappers = []any{
-		(*MissionClientMessage_Start)(nil),
-		(*MissionClientMessage_End)(nil),
 		(*MissionClientMessage_CreateTask)(nil),
+		(*MissionClientMessage_AbortTask)(nil),
 	}
-	file_proto_mission_v1_mission_proto_msgTypes[3].OneofWrappers = []any{
-		(*CreateTask_Requirements)(nil),
-		(*CreateTask_AgentId)(nil),
-	}
-	file_proto_mission_v1_mission_proto_msgTypes[5].OneofWrappers = []any{
-		(*MissionServerMessage_MissionReady)(nil),
-		(*MissionServerMessage_MissionRejected)(nil),
-		(*MissionServerMessage_TaskAccepted)(nil),
+	file_proto_mission_v1_mission_proto_msgTypes[1].OneofWrappers = []any{
 		(*MissionServerMessage_TaskStatusUpdate)(nil),
-		(*MissionServerMessage_MissionEnded)(nil),
+		(*MissionServerMessage_CreateTaskResponse)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1025,7 +749,7 @@ func file_proto_mission_v1_mission_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_mission_v1_mission_proto_rawDesc), len(file_proto_mission_v1_mission_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   12,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

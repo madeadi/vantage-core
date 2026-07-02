@@ -1,11 +1,13 @@
-package main
+package grpc
 
 import (
 	"context"
 	"io"
 	"log/slog"
 	"strings"
-
+	"vantageos-core/internal/core/config"
+	"vantageos-core/internal/core/model"
+	"vantageos-core/internal/core/service"
 	agentv1 "vantageos-core/proto/agent/v1"
 
 	"google.golang.org/grpc"
@@ -15,7 +17,7 @@ import (
 )
 
 type LayoutPoseListener interface {
-	OnPoseUpdate(agentID AgentID, pose *agentv1.PoseTelemetryEvent)
+	OnPoseUpdate(agentID model.AgentID, pose *agentv1.PoseTelemetryEvent)
 }
 
 type TaskUpdatedHandler interface {
@@ -23,29 +25,49 @@ type TaskUpdatedHandler interface {
 }
 
 type Reconnector interface {
-	OnReconnect(agentID AgentID)
+	OnReconnect(agentID model.AgentID)
 }
 
 type agentGRPCServer struct {
 	agentv1.UnimplementedAgentServiceServer
-	registry    *AgentRegistry
-	telemetry   *TelemetryListener
+	registry    *service.AgentRegistry
+	telemetry   *service.TelemetryListener
 	pose        LayoutPoseListener
-	layouts     []AgentLayoutConfig
+	layouts     []config.AgentLayoutConfig
 	reconnector Reconnector // handle reconnects from agent
 	tuHandler   TaskUpdatedHandler
+
+	authService service.AuthService
+}
+
+func NewAgentGRPCServer(
+	registry *service.AgentRegistry,
+	telemetry *service.TelemetryListener,
+	pose LayoutPoseListener,
+	layouts []config.AgentLayoutConfig,
+	tuHandler TaskUpdatedHandler,
+	reconnector Reconnector,
+) agentv1.AgentServiceServer {
+	return &agentGRPCServer{
+		registry:    registry,
+		telemetry:   telemetry,
+		pose:        pose,
+		layouts:     layouts,
+		tuHandler:   tuHandler,
+		reconnector: reconnector,
+	}
 }
 
 func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksServer) error {
 	agentID := agentIDFromContext(stream.Context())
 	slog.Info("StreamTasks: agentsdk connected", "agent_id", agentID)
 
-	s.registry.attachStream(agentID, stream)
+	s.registry.AttachStream(agentID, stream)
 
 	s.reconnector.OnReconnect(agentID)
 
 	defer func() {
-		s.registry.detachStream(agentID)
+		s.registry.DetachStream(agentID)
 		slog.Info("StreamTasks: agentsdk disconnected", "agent_id", agentID)
 	}()
 
@@ -99,7 +121,7 @@ func (s *agentGRPCServer) ReportPoseTelemetry(stream agentv1.AgentService_Report
 }
 
 func (s *agentGRPCServer) GetTransformationMatrices(ctx context.Context, req *agentv1.TransformationMatrixRequest) (*agentv1.TransformationMatrixResponse, error) {
-	agentID := AgentID(req.AgentId)
+	agentID := model.AgentID(req.AgentId)
 	if agentID == "" {
 		agentID = agentIDFromContext(ctx)
 	}
@@ -122,7 +144,7 @@ func (s *agentGRPCServer) GetTransformationMatrices(ctx context.Context, req *ag
 	return &agentv1.TransformationMatrixResponse{Matrices: matrices}, nil
 }
 
-func authenticateMetadata(registry *AgentRegistry, ctx context.Context) error {
+func authenticateMetadata(authService *service.AuthService, ctx context.Context) error {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return status.Error(codes.Unauthenticated, "missing metadata")
@@ -141,28 +163,28 @@ func authenticateMetadata(registry *AgentRegistry, ctx context.Context) error {
 	if len(agentIDVals) == 0 {
 		return status.Error(codes.Unauthenticated, "missing agent_id")
 	}
-	agentID := AgentID(agentIDVals[0])
+	agentID := model.AgentID(agentIDVals[0])
 
-	if !registry.Authenticate(agentID, token) {
+	if !authService.Authenticate(string(agentID), token) {
 		return status.Error(codes.Unauthenticated, "invalid token")
 	}
 	return nil
 }
 
-// authUnaryInterceptor validates the bearer token from gRPC metadata on every unary call.
-func authUnaryInterceptor(registry *AgentRegistry) grpc.UnaryServerInterceptor {
+// AuthUnaryInterceptor validates the bearer token from gRPC metadata on every unary call.
+func AuthUnaryInterceptor(authService *service.AuthService) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if err := authenticateMetadata(registry, ctx); err != nil {
+		if err := authenticateMetadata(authService, ctx); err != nil {
 			return nil, err
 		}
 		return handler(ctx, req)
 	}
 }
 
-// authStreamInterceptor validates the bearer token from gRPC metadata on every stream open.
-func authStreamInterceptor(registry *AgentRegistry) grpc.StreamServerInterceptor {
+// AuthStreamInterceptor validates the bearer token from gRPC metadata on every stream open.
+func AuthStreamInterceptor(authService *service.AuthService) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := authenticateMetadata(registry, ss.Context()); err != nil {
+		if err := authenticateMetadata(authService, ss.Context()); err != nil {
 			return err
 		}
 		return handler(srv, ss)
@@ -170,11 +192,11 @@ func authStreamInterceptor(registry *AgentRegistry) grpc.StreamServerInterceptor
 }
 
 // agentIDFromContext extracts the agent_id from incoming gRPC metadata.
-// Safe to call after authStreamInterceptor has already validated it.
-func agentIDFromContext(ctx context.Context) AgentID {
+// Safe to call after AuthStreamInterceptor has already validated it.
+func agentIDFromContext(ctx context.Context) model.AgentID {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if vals := md.Get("agent_id"); len(vals) > 0 {
-			return AgentID(vals[0])
+			return model.AgentID(vals[0])
 		}
 	}
 	return ""

@@ -1,17 +1,21 @@
-package main
+package controller
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"vantageos-core/internal/core/model"
+	agent2 "vantageos-core/internal/core/service"
 )
 
 type TaskHTTP struct {
-	ar *AgentRegistry
+	dispatcher *agent2.TaskDispatcher
 }
 
-func NewTaskHTTP(ar *AgentRegistry) *TaskHTTP {
-	return &TaskHTTP{ar: ar}
+func NewTaskHTTP(dispatcher *agent2.TaskDispatcher) *TaskHTTP {
+	return &TaskHTTP{dispatcher: dispatcher}
 }
 
 type createTaskRequest struct {
@@ -25,6 +29,7 @@ type createTaskResponse struct {
 }
 
 func (h *TaskHTTP) RegisterRoutes(mux *http.ServeMux) {
+	slog.Info("Registering task HTTP routes")
 	mux.HandleFunc("POST /api/v1/tasks", h.handleCreateTask)
 	mux.HandleFunc("GET /api/v1/tasks", h.handleListTasks)
 }
@@ -59,15 +64,15 @@ func (h *TaskHTTP) handleCreateTask(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	task := &Task{
+	task := &model.Task{
 		ID:      taskID,
-		AgentID: AgentID(body.AgentID),
+		AgentID: model.AgentID(body.AgentID),
 		Type:    body.Type,
 		Payload: []byte(body.Payload),
-		Status:  TaskStatusDraft,
+		Status:  model.TaskStatusDraft,
 	}
 
-	if err := h.ar.SendTask(task); err != nil {
+	if err := h.dispatcher.SendTask(task); err != nil {
 		slog.Error("Failed to send task to agent", "err", err)
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
@@ -78,13 +83,13 @@ func (h *TaskHTTP) handleCreateTask(w http.ResponseWriter, req *http.Request) {
 }
 
 type taskResponse struct {
-	ID        string     `json:"id"`
-	AgentID   string     `json:"agent_id"`
-	Type      string     `json:"type"`
-	Status    TaskStatus `json:"status"`
-	Payload   []byte     `json:"payload,omitempty"`
-	Result    []byte     `json:"result,omitempty"`
-	MissionID MissionID  `json:"mission_id,omitempty"`
+	ID        string           `json:"id"`
+	AgentID   string           `json:"agent_id"`
+	Type      string           `json:"type"`
+	Status    model.TaskStatus `json:"status"`
+	Payload   []byte           `json:"payload,omitempty"`
+	Result    []byte           `json:"result,omitempty"`
+	MissionID string           `json:"mission_id,omitempty"`
 
 	ReceivedAt string `json:"received_at,omitempty"`
 	StartAt    string `json:"start_at,omitempty"`
@@ -105,9 +110,9 @@ type listTasksResponse struct {
 // @Success     200       {object}  listTasksResponse
 // @Router      /api/v1/tasks [get]
 func (h *TaskHTTP) handleListTasks(w http.ResponseWriter, req *http.Request) {
-	agentID := AgentID(req.URL.Query().Get("agent_id"))
+	agentID := model.AgentID(req.URL.Query().Get("agent_id"))
 
-	tasks := h.ar.ListTasks(agentID)
+	tasks := h.dispatcher.ListTasks(agentID)
 
 	resp := listTasksResponse{Tasks: make([]*taskResponse, 0, len(tasks))}
 	for _, t := range tasks {
@@ -138,4 +143,12 @@ func (h *TaskHTTP) handleListTasks(w http.ResponseWriter, req *http.Request) {
 
 func generateTaskID() (string, error) {
 	return generateRandomHex(16)
+}
+
+func generateRandomHex(n int) (string, error) {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }

@@ -7,6 +7,13 @@ dev-smallbot:
 dev-sps-mr:
 	air -c .air.sps-mr.toml
 
+dev-sps-mission:
+	air -c .air.sps-mission.toml
+
+.PHONY: dev-sps
+dev-sps:
+	$(MAKE) -j3 dev-core dev-sps-mr dev-sps-mission
+
 .PHONY: proto
 proto:
 	protoc --go_out=. --go_opt=paths=source_relative \

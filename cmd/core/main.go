@@ -6,13 +6,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log/slog"
 	"net"
 	"net/http"
-
+	"strings"
+	"time"
 	_ "vantageos-core/docs"
+	"vantageos-core/internal/core/config"
+	controller2 "vantageos-core/internal/core/controller"
+	grpc2 "vantageos-core/internal/core/grpc"
+	"vantageos-core/internal/core/repository"
+	"vantageos-core/internal/core/service"
 	agentv1 "vantageos-core/proto/agent/v1"
+	missionv1 "vantageos-core/proto/mission/v1"
 
 	httpSwagger "github.com/swaggo/http-swagger"
 	"google.golang.org/grpc"
@@ -24,18 +32,18 @@ func main() {
 
 	slog.Info("Welcome to VantageOS core")
 
-	cfg, err := LoadConfig(*configPath)
+	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		slog.Error("failed to load config", "err", err)
 		return
 	}
 
-	var allowedAgents []AllowedAgent
-	for _, agent := range cfg.Agents {
-		allowedAgents = append(allowedAgents, AllowedAgent{
-			AgentID: agent.ID,
-			Key:     agent.Key,
-			Name:    agent.Name,
+	var allowedAgents []service.AllowedAgent
+	for _, agt := range cfg.Agents {
+		allowedAgents = append(allowedAgents, service.AllowedAgent{
+			AgentID: agt.ID,
+			Key:     agt.Key,
+			Name:    agt.Name,
 		})
 	}
 	grpcListenAddr := cfg.GRPCListenAddr
@@ -47,15 +55,28 @@ func main() {
 		grpcAdvertiseAddr = "localhost:9090"
 	}
 
-	tRepo := NewTaskRepoMemory()
-	registry := NewAgentRegistry(allowedAgents, grpcAdvertiseAddr, tRepo)
-	defer registry.Close()
+	tRepo := repository.NewTaskRepoMemory()
 
-	taskHTTP := NewTaskHTTP(registry)
+	poseListener := service.NewPoseListener(1 * time.Hour)
+	poseCtx, cancelPose := context.WithCancel(context.Background())
+	defer cancelPose()
+	go poseListener.Run(poseCtx)
+
+	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
+	dispatcher := service.NewTaskDispatcher(ar, tRepo)
+
+	mr := service.NewMissionRegistry(cfg.Missions)
+	mc := controller2.NewMissionController(mr, grpcAdvertiseAddr)
+	ac := controller2.NewAgentController(ar)
+
+	ui := NewUI(ar, tRepo, mr, poseListener)
+
+	taskHTTP := controller2.NewTaskHTTP(dispatcher)
 
 	mux := http.NewServeMux()
-	registry.RegisterRoutes(mux)
-	registry.RegisterUIRoutes(mux)
+	ac.RegisterRoutes(mux)
+	ui.RegisterUIRoutes(mux)
+	mc.RegisterRoutes(mux)
 	taskHTTP.RegisterRoutes(mux)
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 
@@ -66,19 +87,17 @@ func main() {
 		return
 	}
 	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(authUnaryInterceptor(registry)),
-		grpc.StreamInterceptor(authStreamInterceptor(registry)),
+		grpc.UnaryInterceptor(grpc2.AuthUnaryInterceptor(ar.AuthService())),
+		grpc.StreamInterceptor(combinedAuthStreamInterceptor(ar, mr)),
 	)
-	telemetry := NewTelemetryListener()
-	tuHandler := NewTaskUpdatedHandlerMemory(tRepo)
-	agentv1.RegisterAgentServiceServer(grpcServer, &agentGRPCServer{
-		registry:    registry,
-		telemetry:   telemetry,
-		pose:        registry,
-		layouts:     cfg.AgentLayouts,
-		tuHandler:   tuHandler,
-		reconnector: registry,
-	})
+	telemetry := service.NewTelemetryListener()
+
+	mtm := service.NewMissionTaskManager(dispatcher, mr, tRepo)
+	grpcSrv := grpc2.NewAgentGRPCServer(ar, telemetry, poseListener, cfg.AgentLayouts, mtm, dispatcher)
+	agentv1.RegisterAgentServiceServer(grpcServer, grpcSrv)
+
+	missionGrpcSrv := grpc2.NewMissionGrpc(mr, mtm)
+	missionv1.RegisterMissionServiceServer(grpcServer, missionGrpcSrv)
 	go func() {
 		slog.Info("gRPC listening", "addr", grpcListenAddr)
 		if err := grpcServer.Serve(lis); err != nil {
@@ -89,5 +108,19 @@ func main() {
 	slog.Info("HTTP listening", "addr", ":8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		slog.Error("server stopped", "err", err)
+	}
+}
+
+// combinedAuthStreamInterceptor dispatches to the agentsdk or mission auth
+// interceptor depending on which gRPC service the stream belongs to.
+func combinedAuthStreamInterceptor(ar *service.AgentRegistry, mr *service.MissionRegistry) grpc.StreamServerInterceptor {
+	agentAuth := grpc2.AuthStreamInterceptor(ar.AuthService())
+	missionAuth := grpc2.AuthMissionStreamInterceptor(mr)
+	missionServicePrefix := "/" + missionv1.MissionService_ServiceDesc.ServiceName + "/"
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		if strings.HasPrefix(info.FullMethod, missionServicePrefix) {
+			return missionAuth(srv, ss, info, handler)
+		}
+		return agentAuth(srv, ss, info, handler)
 	}
 }

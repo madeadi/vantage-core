@@ -1,16 +1,17 @@
-package main
+package repository
 
 import (
 	"sync"
 	"time"
+	"vantageos-core/internal/core/model"
 )
 
 type TaskRepoMemory struct {
 	mu sync.RWMutex
-	ts map[string]*Task
+	ts map[string]*model.Task
 }
 
-func (t *TaskRepoMemory) GetTaskByID(taskID string) (*Task, error) {
+func (t *TaskRepoMemory) GetTaskByID(taskID string) (*model.Task, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	task := t.ts[taskID]
@@ -22,10 +23,10 @@ func (t *TaskRepoMemory) GetTaskByID(taskID string) (*Task, error) {
 }
 
 func NewTaskRepoMemory() *TaskRepoMemory {
-	return &TaskRepoMemory{ts: make(map[string]*Task)}
+	return &TaskRepoMemory{ts: make(map[string]*model.Task)}
 }
 
-func (t *TaskRepoMemory) SaveTask(task *Task) error {
+func (t *TaskRepoMemory) SaveTask(task *model.Task) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -40,11 +41,11 @@ func (t *TaskRepoMemory) SaveTask(task *Task) error {
 	return nil
 }
 
-func (t *TaskRepoMemory) GetActiveTasksByAgent(agentID AgentID) []*Task {
+func (t *TaskRepoMemory) GetActiveTasksByAgent(agentID model.AgentID) []*model.Task {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	var tasks []*Task
+	var tasks []*model.Task
 	for _, task := range t.ts {
 		if task.AgentID != agentID {
 			continue
@@ -59,11 +60,11 @@ func (t *TaskRepoMemory) GetActiveTasksByAgent(agentID AgentID) []*Task {
 	return tasks
 }
 
-func (t *TaskRepoMemory) ListTasks(agentID AgentID) []*Task {
+func (t *TaskRepoMemory) ListTasks(agentID model.AgentID) []*model.Task {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	var tasks []*Task
+	var tasks []*model.Task
 	for _, task := range t.ts {
 		if agentID != "" && task.AgentID != agentID {
 			continue

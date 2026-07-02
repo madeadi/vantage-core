@@ -3,9 +3,9 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = ["-config", "cmd/sps-mr/spsmr.config.yaml"]
-  bin = "./tmp/sps-mr"
-  cmd = "go build -o ./tmp/sps-mr ./cmd/sps-mr"
+  args_bin = ["-config", "cmd/sps_mission/spsmission.config.yaml"]
+  bin = "./tmp/sps_mission"
+  cmd = "go build -o ./tmp/sps_mission ./cmd/sps_mission"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []
@@ -13,7 +13,7 @@ tmp_dir = "tmp"
   exclude_unchanged = false
   follow_symlinks = false
   full_bin = ""
-  include_dir = ["cmd/sps-mr", "pkg/agentsdk"]
+  include_dir = ["cmd/sps_mission", "pkg/missionsdk"]
   include_ext = ["go", "tpl", "tmpl", "html", "yaml"]
   include_file = []
   kill_delay = "500ms"

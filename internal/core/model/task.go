@@ -1,17 +1,22 @@
-package main
+package model
 
 import (
 	"time"
+	missionv1 "vantageos-core/proto/mission/v1"
 )
 
 type Task struct {
-	ID        string
-	AgentID   AgentID
-	Type      string // e.g. "GO_TO", "GO_HOME"
-	Payload   []byte
-	Status    TaskStatus
-	Result    []byte
-	MissionID MissionID
+	ID      string
+	AgentID AgentID
+	Type    string // e.g. "GO_TO", "GO_HOME"
+	Payload []byte
+	Status  TaskStatus
+	Result  []byte
+
+	// Mission related fields
+	MissionID        string // e.g. "patrol, from_kitchen", etc.
+	MissionContextID string // e.g. delivery ID
+	MissionContext   []byte
 
 	ReceivedAt time.Time
 	StartAt    time.Time
@@ -53,4 +58,17 @@ func (t *Task) CopyMetadata(tn *Task) {
 	tn.ReceivedAt = t.ReceivedAt
 	tn.StartAt = t.StartAt
 	tn.ToExpireAt = t.ToExpireAt
+}
+
+func (t *Task) MissionTaskStatus() missionv1.MissionTaskStatus {
+	switch t.Status {
+	case TaskStatusStarted:
+		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_IN_PROGRESS
+	case TaskStatusFinished:
+		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_COMPLETED
+	case TaskStatusFailed, TaskStatusCannotStart, TaskStatusAborted, TaskStatusExpired:
+		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_FAILED
+	default:
+		return missionv1.MissionTaskStatus_MISSION_TASK_STATUS_UNSPECIFIED
+	}
 }

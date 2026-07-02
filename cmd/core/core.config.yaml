@@ -12,9 +12,12 @@ agents:
     name: SPS MR 2
 
 missions:
-  - id: sps
-    name: SPS Food Delivery
-    key: sps-key
+  - id: from_kitchen
+    name: SPS From Kitchen
+    key: key_from_kitchen
+  - id: to_kitchen
+    name: SPS To Kitchen
+    key: key_to_kitchen
 
 layouts:
   - id: layout1
