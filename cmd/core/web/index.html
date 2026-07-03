@@ -181,6 +181,71 @@
     .status-err { background: #ffebe9; color: #a40e26; }
     .status-warn { background: #fff8c5; color: #6e4b00; }
     .status-dim { background: #eaeef2; color: #57606a; }
+    .agent-skills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.5rem;
+    }
+    .skill-badge {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      background: #ddf4ff;
+      color: #0550ae;
+      cursor: pointer;
+    }
+    .skill-badge:hover { background: #b6e3ff; }
+    .skill-empty { color: #57606a; font-size: 0.75rem; }
+    dialog {
+      border: 1px solid #d0d7de;
+      border-radius: 10px;
+      padding: 0;
+      box-shadow: 0 8px 24px rgba(31,35,40,0.15);
+      min-width: 320px;
+      max-width: 560px;
+      width: 90vw;
+    }
+    dialog::backdrop { background: rgba(31,35,40,0.4); }
+    .dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #eaeef2;
+    }
+    .dialog-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #0550ae;
+    }
+    .dialog-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #57606a;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0.1rem 0.3rem;
+      border-radius: 4px;
+    }
+    .dialog-close:hover { background: #eaeef2; }
+    .dialog-body {
+      padding: 1rem;
+      overflow: auto;
+      max-height: 60vh;
+    }
+    .dialog-body pre {
+      margin: 0;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: #24292f;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
@@ -188,6 +253,16 @@
     <h1>VantageOS Core</h1>
     <span class="badge">monitor</span>
   </header>
+
+  <dialog id="skill-dialog">
+    <div class="dialog-header">
+      <span class="dialog-title" id="skill-dialog-title"></span>
+      <button class="dialog-close" id="skill-dialog-close">✕</button>
+    </div>
+    <div class="dialog-body">
+      <pre id="skill-dialog-payload"></pre>
+    </div>
+  </dialog>
 
   <div hx-ext="sse" sse-connect="/ui/events">
     <div id="live" sse-swap="update" hx-swap="innerHTML">
@@ -213,5 +288,25 @@
       <p class="empty">Connecting to stream…</p>
     </div>
   </div>
+  <script>
+    const dialog = document.getElementById('skill-dialog');
+    const dialogTitle = document.getElementById('skill-dialog-title');
+    const dialogPayload = document.getElementById('skill-dialog-payload');
+
+    document.addEventListener('click', e => {
+      const badge = e.target.closest('.skill-badge');
+      if (!badge) return;
+      dialogTitle.textContent = badge.dataset.skill;
+      try {
+        dialogPayload.textContent = JSON.stringify(JSON.parse(badge.dataset.payload), null, 2);
+      } catch {
+        dialogPayload.textContent = badge.dataset.payload || '{}';
+      }
+      dialog.showModal();
+    });
+
+    document.getElementById('skill-dialog-close').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
+  </script>
 </body>
 </html>

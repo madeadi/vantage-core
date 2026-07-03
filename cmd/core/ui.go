@@ -23,6 +23,7 @@ type AgentWithPose struct {
 	model.Agent
 	Pose    model.LayoutPose
 	Cameras []agentsdk.CameraConfig
+	Skills  []model.AgentSkill
 }
 
 type TaskView struct {
@@ -66,6 +67,7 @@ func (r *UI) Stats() RegistryStats {
 			Agent:   *a,
 			Pose:    r.poseListener.GetLatestPose(a.ID),
 			Cameras: r.ar.GetCameras(a.ID),
+			Skills:  r.ar.SkillsFor(a.ID),
 		})
 	}
 	connected := len(onlineAgents)
@@ -210,6 +212,29 @@ func buildCamerasHTML(cameras []agentsdk.CameraConfig) string {
 	return b.String()
 }
 
+// buildSkillsHTML renders the skills an agent has reported as small badges.
+func buildSkillsHTML(skills []model.AgentSkill) string {
+	if len(skills) == 0 {
+		return `<p class="skill-empty">no skills reported</p>`
+	}
+	var b strings.Builder
+	b.WriteString(`<div class="agent-skills">`)
+	for _, sk := range skills {
+		payload := "{}"
+		if len(sk.Payload) > 0 {
+			payload = string(sk.Payload)
+		}
+		fmt.Fprintf(&b,
+			`<span class="skill-badge" data-skill="%s" data-payload="%s">%s</span>`,
+			html.EscapeString(sk.Name),
+			html.EscapeString(payload),
+			html.EscapeString(sk.Name),
+		)
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
 func buildStatsFragment(s RegistryStats) string {
 	var b strings.Builder
 	fmt.Fprintf(&b,
@@ -235,8 +260,8 @@ func buildStatsFragment(s RegistryStats) string {
 				)
 			}
 			fmt.Fprintf(&b,
-				`<li class="agent-item"><div class="agent-item-header"><span class="dot"></span><span class="agent-name">%s</span>%s</div>%s</li>`,
-				html.EscapeString(a.Name), poseStr, buildCamerasHTML(a.Cameras),
+				`<li class="agent-item"><div class="agent-item-header"><span class="dot"></span><span class="agent-name">%s</span>%s</div>%s%s</li>`,
+				html.EscapeString(a.Name), poseStr, buildSkillsHTML(a.Skills), buildCamerasHTML(a.Cameras),
 			)
 		}
 		b.WriteString(`</ul>`)

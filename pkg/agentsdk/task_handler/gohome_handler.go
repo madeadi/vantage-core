@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"vantageos-core/pkg/agentsdk/agent_skill"
 	agentv1 "vantageos-core/proto/agent/v1"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 type GoHomeHandler struct {
@@ -33,4 +36,14 @@ func (g GoHomeHandler) Execute(ctx context.Context, task *agentv1.Task) (result 
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+func (l GoHomeHandler) GetPayloadSchema() string {
+	schema, err := jsonschema.For[GotoPayload](nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	out, _ := json.Marshal(schema)
+	return string(out)
 }

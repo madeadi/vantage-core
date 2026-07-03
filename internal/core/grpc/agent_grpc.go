@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"strings"
@@ -118,6 +119,25 @@ func (s *agentGRPCServer) ReportPoseTelemetry(stream agentv1.AgentService_Report
 		}
 		s.pose.OnPoseUpdate(agentID, event)
 	}
+}
+
+func (s *agentGRPCServer) ReportSkills(ctx context.Context, req *agentv1.SkillRegistration) (*agentv1.SkillRegistrationAck, error) {
+	agentID := agentIDFromContext(ctx)
+
+	skills := make([]model.AgentSkill, 0, len(req.GetSkills()))
+	for _, sk := range req.GetSkills() {
+		if err := service.ValidateSchema(sk.GetPayloadSchema()); err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "skill %q has invalid payload schema: %v", sk.GetType(), err)
+		}
+		skills = append(skills, model.AgentSkill{
+			Name:    sk.GetType(),
+			Payload: json.RawMessage(sk.GetPayloadSchema()),
+		})
+	}
+	s.registry.SetSkills(agentID, skills)
+	slog.Info("ReportSkills: skills registered", "agent_id", agentID, "count", len(skills))
+
+	return &agentv1.SkillRegistrationAck{}, nil
 }
 
 func (s *agentGRPCServer) GetTransformationMatrices(ctx context.Context, req *agentv1.TransformationMatrixRequest) (*agentv1.TransformationMatrixResponse, error) {

@@ -888,6 +888,147 @@ func (x *TransformationMatrix) GetNorthOffset() float64 {
 	return 0
 }
 
+// skill registration
+type Skill struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`                                        // e.g. "tech.taksu.GO_TO", "tech.taksu.GO_HOME"
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`                          // human-readable description of the skill
+	PayloadSchema string                 `protobuf:"bytes,3,opt,name=payload_schema,json=payloadSchema,proto3" json:"payload_schema,omitempty"` // JSON schema for the skill payload
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Skill) Reset() {
+	*x = Skill{}
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Skill) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Skill) ProtoMessage() {}
+
+func (x *Skill) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Skill.ProtoReflect.Descriptor instead.
+func (*Skill) Descriptor() ([]byte, []int) {
+	return file_proto_agent_v1_agent_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *Skill) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Skill) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *Skill) GetPayloadSchema() string {
+	if x != nil {
+		return x.PayloadSchema
+	}
+	return ""
+}
+
+type SkillRegistration struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Skills        []*Skill               `protobuf:"bytes,1,rep,name=skills,proto3" json:"skills,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SkillRegistration) Reset() {
+	*x = SkillRegistration{}
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillRegistration) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillRegistration) ProtoMessage() {}
+
+func (x *SkillRegistration) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillRegistration.ProtoReflect.Descriptor instead.
+func (*SkillRegistration) Descriptor() ([]byte, []int) {
+	return file_proto_agent_v1_agent_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SkillRegistration) GetSkills() []*Skill {
+	if x != nil {
+		return x.Skills
+	}
+	return nil
+}
+
+type SkillRegistrationAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SkillRegistrationAck) Reset() {
+	*x = SkillRegistrationAck{}
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SkillRegistrationAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SkillRegistrationAck) ProtoMessage() {}
+
+func (x *SkillRegistrationAck) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_v1_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SkillRegistrationAck.ProtoReflect.Descriptor instead.
+func (*SkillRegistrationAck) Descriptor() ([]byte, []int) {
+	return file_proto_agent_v1_agent_proto_rawDescGZIP(), []int{16}
+}
+
 var File_proto_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_v1_agent_proto_rawDesc = "" +
@@ -940,7 +1081,14 @@ const file_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\x14TransformationMatrix\x12\x1b\n" +
 	"\tlayout_id\x18\x01 \x01(\tR\blayoutId\x12\x16\n" +
 	"\x06matrix\x18\x02 \x03(\x01R\x06matrix\x12!\n" +
-	"\fnorth_offset\x18\x03 \x01(\x01R\vnorthOffset*\xc4\x02\n" +
+	"\fnorth_offset\x18\x03 \x01(\x01R\vnorthOffset\"d\n" +
+	"\x05Skill\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12%\n" +
+	"\x0epayload_schema\x18\x03 \x01(\tR\rpayloadSchema\"<\n" +
+	"\x11SkillRegistration\x12'\n" +
+	"\x06skills\x18\x01 \x03(\v2\x0f.agent.v1.SkillR\x06skills\"\x16\n" +
+	"\x14SkillRegistrationAck*\xc4\x02\n" +
 	"\n" +
 	"TaskStatus\x12\x1b\n" +
 	"\x17TASK_STATUS_UNSPECIFIED\x10\x00\x12\x15\n" +
@@ -955,12 +1103,13 @@ const file_proto_agent_v1_agent_proto_rawDesc = "" +
 	"\x12TASK_STATUS_FAILED\x10\t\x12\x19\n" +
 	"\x15TASK_STATUS_FINISHING\x10\n" +
 	"\x12\x18\n" +
-	"\x14TASK_STATUS_FINISHED\x10\v2\xd3\x02\n" +
+	"\x14TASK_STATUS_FINISHED\x10\v2\xa0\x03\n" +
 	"\fAgentService\x12=\n" +
 	"\vStreamTasks\x12\x11.agent.v1.TaskAck\x1a\x17.agent.v1.ServerMessage(\x010\x01\x12E\n" +
 	"\x0fReportTelemetry\x12\x18.agent.v1.TelemetryEvent\x1a\x16.agent.v1.TelemetryAck(\x01\x12Q\n" +
 	"\x13ReportPoseTelemetry\x12\x1c.agent.v1.PoseTelemetryEvent\x1a\x1a.agent.v1.PoseTelemetryAck(\x01\x12j\n" +
-	"\x19GetTransformationMatrices\x12%.agent.v1.TransformationMatrixRequest\x1a&.agent.v1.TransformationMatrixResponseB*Z(vantageos-core/proto/agentsdk/v1;agentv1b\x06proto3"
+	"\x19GetTransformationMatrices\x12%.agent.v1.TransformationMatrixRequest\x1a&.agent.v1.TransformationMatrixResponse\x12K\n" +
+	"\fReportSkills\x12\x1b.agent.v1.SkillRegistration\x1a\x1e.agent.v1.SkillRegistrationAckB*Z(vantageos-core/proto/agentsdk/v1;agentv1b\x06proto3"
 
 var (
 	file_proto_agent_v1_agent_proto_rawDescOnce sync.Once
@@ -975,7 +1124,7 @@ func file_proto_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_proto_agent_v1_agent_proto_goTypes = []any{
 	(TaskStatus)(0),                      // 0: agent.v1.TaskStatus
 	(*ServerMessage)(nil),                // 1: agent.v1.ServerMessage
@@ -992,32 +1141,38 @@ var file_proto_agent_v1_agent_proto_goTypes = []any{
 	(*TransformationMatrixRequest)(nil),  // 12: agent.v1.TransformationMatrixRequest
 	(*TransformationMatrixResponse)(nil), // 13: agent.v1.TransformationMatrixResponse
 	(*TransformationMatrix)(nil),         // 14: agent.v1.TransformationMatrix
-	(*timestamppb.Timestamp)(nil),        // 15: google.protobuf.Timestamp
+	(*Skill)(nil),                        // 15: agent.v1.Skill
+	(*SkillRegistration)(nil),            // 16: agent.v1.SkillRegistration
+	(*SkillRegistrationAck)(nil),         // 17: agent.v1.SkillRegistrationAck
+	(*timestamppb.Timestamp)(nil),        // 18: google.protobuf.Timestamp
 }
 var file_proto_agent_v1_agent_proto_depIdxs = []int32{
 	4,  // 0: agent.v1.ServerMessage.task:type_name -> agent.v1.Task
 	2,  // 1: agent.v1.ServerMessage.abort:type_name -> agent.v1.AbortCommand
 	0,  // 2: agent.v1.TaskAck.status:type_name -> agent.v1.TaskStatus
-	15, // 3: agent.v1.Task.to_expire_at:type_name -> google.protobuf.Timestamp
-	15, // 4: agent.v1.Task.to_finalise_at:type_name -> google.protobuf.Timestamp
+	18, // 3: agent.v1.Task.to_expire_at:type_name -> google.protobuf.Timestamp
+	18, // 4: agent.v1.Task.to_finalise_at:type_name -> google.protobuf.Timestamp
 	5,  // 5: agent.v1.Task.agent_context:type_name -> agent.v1.AgentContext
-	15, // 6: agent.v1.PoseTelemetryEvent.timestamp:type_name -> google.protobuf.Timestamp
-	15, // 7: agent.v1.HeartbeatEvent.sent_at:type_name -> google.protobuf.Timestamp
-	15, // 8: agent.v1.HeartbeatAck.sent_at:type_name -> google.protobuf.Timestamp
+	18, // 6: agent.v1.PoseTelemetryEvent.timestamp:type_name -> google.protobuf.Timestamp
+	18, // 7: agent.v1.HeartbeatEvent.sent_at:type_name -> google.protobuf.Timestamp
+	18, // 8: agent.v1.HeartbeatAck.sent_at:type_name -> google.protobuf.Timestamp
 	14, // 9: agent.v1.TransformationMatrixResponse.matrices:type_name -> agent.v1.TransformationMatrix
-	3,  // 10: agent.v1.AgentService.StreamTasks:input_type -> agent.v1.TaskAck
-	6,  // 11: agent.v1.AgentService.ReportTelemetry:input_type -> agent.v1.TelemetryEvent
-	8,  // 12: agent.v1.AgentService.ReportPoseTelemetry:input_type -> agent.v1.PoseTelemetryEvent
-	12, // 13: agent.v1.AgentService.GetTransformationMatrices:input_type -> agent.v1.TransformationMatrixRequest
-	1,  // 14: agent.v1.AgentService.StreamTasks:output_type -> agent.v1.ServerMessage
-	7,  // 15: agent.v1.AgentService.ReportTelemetry:output_type -> agent.v1.TelemetryAck
-	9,  // 16: agent.v1.AgentService.ReportPoseTelemetry:output_type -> agent.v1.PoseTelemetryAck
-	13, // 17: agent.v1.AgentService.GetTransformationMatrices:output_type -> agent.v1.TransformationMatrixResponse
-	14, // [14:18] is the sub-list for method output_type
-	10, // [10:14] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	15, // 10: agent.v1.SkillRegistration.skills:type_name -> agent.v1.Skill
+	3,  // 11: agent.v1.AgentService.StreamTasks:input_type -> agent.v1.TaskAck
+	6,  // 12: agent.v1.AgentService.ReportTelemetry:input_type -> agent.v1.TelemetryEvent
+	8,  // 13: agent.v1.AgentService.ReportPoseTelemetry:input_type -> agent.v1.PoseTelemetryEvent
+	12, // 14: agent.v1.AgentService.GetTransformationMatrices:input_type -> agent.v1.TransformationMatrixRequest
+	16, // 15: agent.v1.AgentService.ReportSkills:input_type -> agent.v1.SkillRegistration
+	1,  // 16: agent.v1.AgentService.StreamTasks:output_type -> agent.v1.ServerMessage
+	7,  // 17: agent.v1.AgentService.ReportTelemetry:output_type -> agent.v1.TelemetryAck
+	9,  // 18: agent.v1.AgentService.ReportPoseTelemetry:output_type -> agent.v1.PoseTelemetryAck
+	13, // 19: agent.v1.AgentService.GetTransformationMatrices:output_type -> agent.v1.TransformationMatrixResponse
+	17, // 20: agent.v1.AgentService.ReportSkills:output_type -> agent.v1.SkillRegistrationAck
+	16, // [16:21] is the sub-list for method output_type
+	11, // [11:16] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_v1_agent_proto_init() }
@@ -1035,7 +1190,7 @@ func file_proto_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_v1_agent_proto_rawDesc), len(file_proto_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

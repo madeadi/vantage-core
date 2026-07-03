@@ -19,6 +19,8 @@ service AgentService {
 
     // Agent get the affine transformation matrix from core
     rpc GetTransformationMatrices(TransformationMatrixRequest) returns (TransformationMatrixResponse);
+    // agents send skills to core, so that core can know what skills the agent has
+    rpc ReportSkills(SkillRegistration) returns (SkillRegistrationAck);
 }
 
 message ServerMessage {
@@ -115,4 +117,19 @@ message TransformationMatrix {
   string layout_id = 1;
   repeated double matrix = 2; // 3x3 affine transformation matrix in row-major order (exactly 9 values)
   double north_offset = 3;    // clockwise rotation in radians from robot north to layout north
+}
+
+// skill registration
+message Skill {
+  string type = 1; // e.g. "tech.taksu.GO_TO", "tech.taksu.GO_HOME"
+  string description = 2; // human-readable description of the skill
+  string payload_schema = 3; // JSON schema for the skill payload
+}
+
+message SkillRegistration {
+  repeated Skill skills = 1;
+}
+
+message SkillRegistrationAck {
+
 }

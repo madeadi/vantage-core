@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	agentskill "vantageos-core/pkg/agentsdk/agent_skill"
 	agentv1 "vantageos-core/proto/agent/v1"
+
+	myschema "vantageos-core/pkg/agentsdk/schema"
+
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 type JackHandler struct {
@@ -54,3 +59,14 @@ const (
 	Up   Direction = "up"
 	Down Direction = "down"
 )
+
+func (g JackHandler) GetPayloadSchema() string {
+	if schema, err := jsonschema.For[JackPayload](nil); err != nil {
+		slog.Error("failed to generate schema", "err", err)
+		return ""
+	} else {
+		schema.Properties["direction"].Enum = myschema.EnumSchema(Up, Down)
+		out, _ := json.Marshal(schema)
+		return string(out)
+	}
+}

@@ -119,6 +119,14 @@ func (r *AgentRegistry) GetCameras(agentID model.AgentID) []agentsdk.CameraConfi
 	return r.cameras[agentID]
 }
 
+// SetSkills updates the skills reported by an agentsdk without touching its cameras.
+func (r *AgentRegistry) SetSkills(agentID model.AgentID, skills []model.AgentSkill) {
+	slog.Info("Setting Agent Skills", "agent_id", agentID, "skills", len(skills))
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.skills[agentID] = skills
+}
+
 func (r *AgentRegistry) SkillsFor(agentID model.AgentID) []model.AgentSkill {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

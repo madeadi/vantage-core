@@ -24,13 +24,9 @@ func (t tokenCreds) GetRequestMetadata(_ context.Context, _ ...string) (map[stri
 
 func (t tokenCreds) RequireTransportSecurity() bool { return false }
 
-type SkillPayload struct {
-	Name string `json:"name"`
-}
-
 type Skill struct {
-	Name    string       `json:"name"`
-	Payload SkillPayload `json:"payload"`
+	Name    string          `json:"name"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 type registerRequest struct {

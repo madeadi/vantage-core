@@ -23,6 +23,7 @@ const (
 	AgentService_ReportTelemetry_FullMethodName           = "/agent.v1.AgentService/ReportTelemetry"
 	AgentService_ReportPoseTelemetry_FullMethodName       = "/agent.v1.AgentService/ReportPoseTelemetry"
 	AgentService_GetTransformationMatrices_FullMethodName = "/agent.v1.AgentService/GetTransformationMatrices"
+	AgentService_ReportSkills_FullMethodName              = "/agent.v1.AgentService/ReportSkills"
 )
 
 // AgentServiceClient is the client API for AgentService service.
@@ -40,6 +41,8 @@ type AgentServiceClient interface {
 	ReportPoseTelemetry(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[PoseTelemetryEvent, PoseTelemetryAck], error)
 	// Agent get the affine transformation matrix from core
 	GetTransformationMatrices(ctx context.Context, in *TransformationMatrixRequest, opts ...grpc.CallOption) (*TransformationMatrixResponse, error)
+	// agents send skills to core, so that core can know what skills the agent has
+	ReportSkills(ctx context.Context, in *SkillRegistration, opts ...grpc.CallOption) (*SkillRegistrationAck, error)
 }
 
 type agentServiceClient struct {
@@ -99,6 +102,16 @@ func (c *agentServiceClient) GetTransformationMatrices(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *agentServiceClient) ReportSkills(ctx context.Context, in *SkillRegistration, opts ...grpc.CallOption) (*SkillRegistrationAck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SkillRegistrationAck)
+	err := c.cc.Invoke(ctx, AgentService_ReportSkills_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServiceServer is the server API for AgentService service.
 // All implementations must embed UnimplementedAgentServiceServer
 // for forward compatibility.
@@ -114,6 +127,8 @@ type AgentServiceServer interface {
 	ReportPoseTelemetry(grpc.ClientStreamingServer[PoseTelemetryEvent, PoseTelemetryAck]) error
 	// Agent get the affine transformation matrix from core
 	GetTransformationMatrices(context.Context, *TransformationMatrixRequest) (*TransformationMatrixResponse, error)
+	// agents send skills to core, so that core can know what skills the agent has
+	ReportSkills(context.Context, *SkillRegistration) (*SkillRegistrationAck, error)
 	mustEmbedUnimplementedAgentServiceServer()
 }
 
@@ -135,6 +150,9 @@ func (UnimplementedAgentServiceServer) ReportPoseTelemetry(grpc.ClientStreamingS
 }
 func (UnimplementedAgentServiceServer) GetTransformationMatrices(context.Context, *TransformationMatrixRequest) (*TransformationMatrixResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTransformationMatrices not implemented")
+}
+func (UnimplementedAgentServiceServer) ReportSkills(context.Context, *SkillRegistration) (*SkillRegistrationAck, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReportSkills not implemented")
 }
 func (UnimplementedAgentServiceServer) mustEmbedUnimplementedAgentServiceServer() {}
 func (UnimplementedAgentServiceServer) testEmbeddedByValue()                      {}
@@ -196,6 +214,24 @@ func _AgentService_GetTransformationMatrices_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentService_ReportSkills_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SkillRegistration)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).ReportSkills(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentService_ReportSkills_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).ReportSkills(ctx, req.(*SkillRegistration))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentService_ServiceDesc is the grpc.ServiceDesc for AgentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -206,6 +242,10 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTransformationMatrices",
 			Handler:    _AgentService_GetTransformationMatrices_Handler,
+		},
+		{
+			MethodName: "ReportSkills",
+			Handler:    _AgentService_ReportSkills_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

@@ -1,9 +1,6 @@
 dev-core:
 	air -c .air.core.toml
 
-dev-smallbot:
-	air -c .air.smallbot.toml
-
 dev-sps-mr:
 	air -c .air.sps-mr.toml
 

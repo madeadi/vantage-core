@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -16,6 +17,8 @@ type TaskAckFn func(ack *agentv1.TaskAck)
 type TaskHandler interface {
 	GetTaskType() string
 	Execute(ctx context.Context, task *agentv1.Task) (result []byte, err error)
+	// GetPayloadSchema returns the JSON schema for the payload
+	GetPayloadSchema() string
 }
 
 type runningTask struct {
@@ -113,8 +116,8 @@ func (tm *AgentTaskManager) AbortCurrentTask(taskID string) bool {
 // Skills returns the list of skills this manager can handle, ready for registration.
 func (tm *AgentTaskManager) Skills() []server.Skill {
 	skills := make([]server.Skill, 0, len(tm.handlers))
-	for t := range tm.handlers {
-		skills = append(skills, server.Skill{Name: t, Payload: server.SkillPayload{Name: t}})
+	for _, t := range tm.handlers {
+		skills = append(skills, server.Skill{Name: t.GetTaskType(), Payload: json.RawMessage(t.GetPayloadSchema())})
 	}
 	return skills
 }
