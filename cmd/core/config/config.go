@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"time"
 	model2 "vantageos-core/cmd/core/model"
 
 	"gopkg.in/yaml.v3"
@@ -16,6 +17,7 @@ type Config struct {
 	GRPCAdvertiseAddr string           `yaml:"grpc_advertise_addr"`
 	PocketBase        PocketBaseConfig `yaml:"pocketbase"`
 	MQTT              MQTTConfig       `yaml:"mqtt"`
+	Telemetry         TelemetryConfig  `yaml:"telemetry"`
 }
 
 type PocketBaseConfig struct {
@@ -37,6 +39,42 @@ type MQTTConfig struct {
 	Username    string `yaml:"username"`
 	Password    string `yaml:"password"`
 	TopicPrefix string `yaml:"topic_prefix"` // must match the prefix agents publish under
+}
+
+// TelemetryConfig configures Step 12's Postgres/TimescaleDB persistence and
+// (ThrottleWindow) retrofits Step 9's event throttling window into the same
+// bootstrap-only block -- see specs/mqtt_telemetry.specs.md's Ops section.
+// Off by default, same reasoning as MQTTConfig: a core instance with
+// persistence_enabled: false keeps validating and emitting agent_events
+// exactly as before, it just doesn't write telemetry rows anywhere.
+//
+// The per-group persist toggle (telemetry_settings.persist_enabled, live in
+// PocketBase -- see cmd/core/telemetry/persistcfg) is a second gate on top
+// of this one: both must be on for a given group's telemetry to be written.
+type TelemetryConfig struct {
+	PersistenceEnabled bool `yaml:"persistence_enabled"`
+	// DSN is the Postgres/TimescaleDB connection string, e.g.
+	// "postgres://user:pass@host:5432/dbname". Bootstrap-only, per CLAUDE.md
+	// -- unlike the config collections, this database isn't PocketBase, so
+	// there's no live-editable row to source it from.
+	DSN string `yaml:"dsn"`
+	// BatchSize/FlushInterval configure the batch writer (see
+	// cmd/core/telemetry/store.Config); zero values fall back to that
+	// package's own defaults (100 rows / 1s).
+	BatchSize     int           `yaml:"batch_size"`
+	FlushInterval time.Duration `yaml:"flush_interval"`
+	// Retention overrides the telemetry hypertable's retention policy
+	// (default 90 days, baked into migrations/0001_init.sql as the sane
+	// starting point -- see that file's doc comment). A non-zero value here
+	// re-applies the policy at startup via store.ApplyRetentionPolicy so a
+	// deployment can change it without hand-editing SQL.
+	Retention time.Duration `yaml:"retention"`
+	// ThrottleWindow configures Step 9's event throttling window (see
+	// cmd/core/telemetry/events.Config.Window); zero falls back to that
+	// package's own default (60s). Listed under "telemetry:" per the Ops
+	// section even though throttling itself doesn't depend on persistence
+	// being enabled.
+	ThrottleWindow time.Duration `yaml:"throttle_window"`
 }
 
 // AgentConfig is one row of the "agents" PocketBase collection.

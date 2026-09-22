@@ -8,6 +8,8 @@ import (
 	grpc2 "vantageos-core/cmd/core/grpc"
 	"vantageos-core/cmd/core/model"
 	"vantageos-core/cmd/core/service"
+	"vantageos-core/cmd/core/telemetry/mapping"
+	"vantageos-core/cmd/core/telemetry/persistcfg"
 	"vantageos-core/cmd/core/telemetry/registry"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -22,10 +24,11 @@ import (
 // "username"/"role" fields) are created by the migrations in
 // cmd/core/migrations, not here.
 const (
-	collAgents       = "agents"
-	collMissions     = "missions"
-	collAgentLayouts = "agent_layouts"
-	collAgentGroups  = "agent_groups"
+	collAgents            = "agents"
+	collMissions          = "missions"
+	collAgentLayouts      = "agent_layouts"
+	collAgentGroups       = "agent_groups"
+	collTelemetrySettings = "telemetry_settings"
 )
 
 // --- loaders -----------------------------------------------------------------
@@ -124,6 +127,51 @@ func loadAgentGroupMemberships(app core.App) (map[string]string, error) {
 	return out, nil
 }
 
+// loadAgentGroupMappings queries agent_groups and returns group record id ->
+// decoded telemetry_mapping for every group that has one set. A group with
+// no mapping (JSONField default) is omitted -- mapping.Apply treats a
+// missing entry (nil *mapping.Spec) as "use the documented defaults".
+func loadAgentGroupMappings(app core.App) (map[string]*mapping.Spec, error) {
+	records, err := app.FindAllRecords(collAgentGroups)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]*mapping.Spec, len(records))
+	for _, r := range records {
+		raw, ok := r.Get("telemetry_mapping").(types.JSONRaw)
+		if !ok || len(raw) == 0 || string(raw) == "null" {
+			continue
+		}
+		var spec mapping.Spec
+		if err := json.Unmarshal(raw, &spec); err != nil {
+			slog.Error("agent_groups: bad telemetry_mapping, skipping row", "record", r.Id, "err", err)
+			continue
+		}
+		out[r.Id] = &spec
+	}
+	return out, nil
+}
+
+// loadTelemetryPersistSettings queries telemetry_settings and returns
+// agent_group record id -> persist_enabled. A group with no row is omitted
+// -- persistcfg.Registry.PersistEnabled treats a missing entry as disabled,
+// matching the telemetry_settings migration's off-by-default doc comment.
+func loadTelemetryPersistSettings(app core.App) (map[string]bool, error) {
+	records, err := app.FindAllRecords(collTelemetrySettings)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(records))
+	for _, r := range records {
+		groupID := r.GetString("agent_group")
+		if groupID == "" {
+			continue
+		}
+		out[groupID] = r.GetBool("persist_enabled")
+	}
+	return out, nil
+}
+
 // --- live reload -----------------------------------------------------------
 
 // watchConfig binds PocketBase record hooks so that create/update/delete on a
@@ -133,7 +181,7 @@ func loadAgentGroupMemberships(app core.App) (map[string]string, error) {
 // Caveat: reg-tokens and layout matrices update immediately, but an agent or
 // mission with a live gRPC stream keeps it until it reconnects — token removal
 // only blocks new registrations.
-func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionRegistry, agentSrv grpc2.AgentServer, schemaRegistry *registry.Registry) {
+func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionRegistry, agentSrv grpc2.AgentServer, schemaRegistry *registry.Registry, persistRegistry *persistcfg.Registry) {
 	reloadAgents := func() {
 		agents, err := loadAllowedAgents(app)
 		if err != nil {
@@ -189,6 +237,35 @@ func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionReg
 		}
 		slog.Info("agent_group schemas reloaded", "count", len(schemas))
 	}
+	// telemetry_mapping and persist_enabled both feed Step 12's persistence
+	// gate (cmd/core/telemetry.go); nil persistRegistry means persistence is
+	// off in this deployment (cfg.Telemetry.PersistenceEnabled false) -- skip
+	// the reload entirely rather than tracking config no listener will ever
+	// read.
+	reloadAgentGroupMappings := func() {
+		if persistRegistry == nil {
+			return
+		}
+		mappings, err := loadAgentGroupMappings(app)
+		if err != nil {
+			slog.Error("reload agent_group telemetry_mapping failed", "err", err)
+			return
+		}
+		persistRegistry.SetMappings(mappings)
+		slog.Info("agent_group telemetry_mapping reloaded", "count", len(mappings))
+	}
+	reloadTelemetryPersistSettings := func() {
+		if persistRegistry == nil {
+			return
+		}
+		settings, err := loadTelemetryPersistSettings(app)
+		if err != nil {
+			slog.Error("reload telemetry_settings failed", "err", err)
+			return
+		}
+		persistRegistry.SetPersistEnabled(settings)
+		slog.Info("telemetry_settings reloaded", "count", len(settings))
+	}
 
 	bind := func(coll string, reload func()) {
 		onChange := func(e *core.RecordEvent) error {
@@ -208,4 +285,6 @@ func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionReg
 	bind(collMissions, reloadMissions)
 	bind(collAgentLayouts, reloadAgentLayouts)
 	bind(collAgentGroups, reloadAgentGroupSchemas)
+	bind(collAgentGroups, reloadAgentGroupMappings)
+	bind(collTelemetrySettings, reloadTelemetryPersistSettings)
 }

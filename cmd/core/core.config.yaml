@@ -23,3 +23,19 @@ mqtt:
   username: ""
   password: ""
   topic_prefix: "vantageos"
+
+# Postgres/TimescaleDB persistence for validated telemetry (see
+# cmd/core/telemetry/store) and Step 9's event-throttling window. Off by
+# default -- validation and agent_events still run with persistence_enabled:
+# false, telemetry just isn't written anywhere. Also gated per agent group by
+# the telemetry_settings collection's persist_enabled toggle (admin UI) --
+# both this flag and that toggle must be on for a group's telemetry to land
+# in Postgres. batch_size/flush_interval/retention/throttle_window default to
+# 100 rows / 1s / 90 days / 60s when left at their zero value.
+telemetry:
+  persistence_enabled: false
+  dsn: "postgres://vantage:vantage@127.0.0.1:5432/vantage_telemetry"
+  batch_size: 100
+  flush_interval: "1s"
+  retention: "2160h" # 90 days
+  throttle_window: "60s"

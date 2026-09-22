@@ -18,12 +18,15 @@ import (
 	grpc2 "vantageos-core/cmd/core/grpc"
 	"vantageos-core/cmd/core/repository"
 	"vantageos-core/cmd/core/service"
+	"vantageos-core/cmd/core/telemetry/persistcfg"
 	"vantageos-core/cmd/core/telemetry/registry"
+	"vantageos-core/cmd/core/telemetry/store"
 	_ "vantageos-core/docs"
 	agentv1 "vantageos-core/proto/agent/v1"
 	"vantageos-core/proto/api/v1/apiv1connect"
 	missionv1 "vantageos-core/proto/mission/v1"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"google.golang.org/grpc"
 )
@@ -94,6 +97,52 @@ func main() {
 		slog.Error("one or more agent_groups schemas failed to compile", "err", err)
 	}
 
+	// persistRegistry stays nil (and watchConfig/startTelemetryIngest treat
+	// that as "persistence is off") unless cfg.Telemetry.PersistenceEnabled --
+	// no point tracking telemetry_mapping/telemetry_settings reloads for a
+	// store that will never read them.
+	var persistRegistry *persistcfg.Registry
+	var persistStore *store.Store
+	if cfg.Telemetry.PersistenceEnabled {
+		persistRegistry = persistcfg.New()
+		agentGroupMappings, err := loadAgentGroupMappings(pbApp)
+		if err != nil {
+			slog.Error("failed to load agent_groups telemetry_mapping from pocketbase", "err", err)
+			return
+		}
+		persistRegistry.SetMappings(agentGroupMappings)
+		telemetrySettings, err := loadTelemetryPersistSettings(pbApp)
+		if err != nil {
+			slog.Error("failed to load telemetry_settings from pocketbase", "err", err)
+			return
+		}
+		persistRegistry.SetPersistEnabled(telemetrySettings)
+
+		pgPool, err := pgxpool.New(context.Background(), cfg.Telemetry.DSN)
+		if err != nil {
+			slog.Error("telemetry persistence: failed to create postgres pool", "err", err)
+			return
+		}
+		if err := store.Migrate(context.Background(), pgPool); err != nil {
+			slog.Error("telemetry persistence: migration failed", "err", err)
+			return
+		}
+		if err := store.ApplyRetentionPolicy(context.Background(), pgPool, cfg.Telemetry.Retention); err != nil {
+			// Not fatal: the migration already declared a 90-day policy (see
+			// migrations/0001_init.sql), so a failure here just means a
+			// non-default cfg.Telemetry.Retention wasn't applied -- ingestion
+			// itself is unaffected.
+			slog.Error("telemetry persistence: failed to apply retention policy", "err", err)
+		}
+
+		persistStore = store.New(pgPool, store.Config{
+			BatchSize:     cfg.Telemetry.BatchSize,
+			FlushInterval: cfg.Telemetry.FlushInterval,
+		})
+		go persistStore.Run(context.Background())
+		slog.Info("telemetry persistence enabled", "batch_size", cfg.Telemetry.BatchSize, "flush_interval", cfg.Telemetry.FlushInterval)
+	}
+
 	grpcListenAddr := cfg.GRPCListenAddr
 	if grpcListenAddr == "" {
 		grpcListenAddr = ":9090"
@@ -115,7 +164,7 @@ func main() {
 	// with mqtt.enabled: false in its config runs exactly as it did before
 	// this feature existed.
 	if cfg.MQTT.Enabled {
-		startTelemetryIngest(cfg.MQTT, pbApp, schemaRegistry)
+		startTelemetryIngest(cfg.MQTT, cfg.Telemetry, pbApp, schemaRegistry, persistRegistry, persistStore)
 	}
 
 	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
@@ -158,7 +207,7 @@ func main() {
 
 	// Re-dispatch config-collection edits into the registries without a restart,
 	// then start serving the PocketBase admin UI + REST API.
-	watchConfig(pbApp, ar, mr, grpcSrv, schemaRegistry)
+	watchConfig(pbApp, ar, mr, grpcSrv, schemaRegistry, persistRegistry)
 	go servePocketBase(pbApp, cfg.PocketBase.ListenAddr)
 
 	missionGrpcSrv := grpc2.NewMissionGrpc(mr, mtm)

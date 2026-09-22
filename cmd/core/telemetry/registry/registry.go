@@ -123,6 +123,21 @@ func (r *Registry) SetGroupSchemas(schemas map[string]json.RawMessage) error {
 	return firstErr
 }
 
+// GroupID returns the group id assigned to agentID, or ok=false if the agent
+// has no group -- independent of whether that group has a schema set.
+// Callers that need group membership without validation (e.g. the
+// persistence mapping/toggle lookup in cmd/core/telemetry.go, which applies
+// even to a no_contract group) use this instead of Resolve.
+func (r *Registry) GroupID(agentID string) (string, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	groupID, ok := r.agentGroup[agentID]
+	if !ok || groupID == "" {
+		return "", false
+	}
+	return groupID, true
+}
+
 // Resolve returns the compiled contract for agentID, or ok=false if the
 // agent has no group, or its group has no schema set — the no_contract case
 // from specs/mqtt_telemetry.specs.md.
