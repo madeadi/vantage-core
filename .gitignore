@@ -5,3 +5,7 @@ vantageos-core
 /smallbot
 sps-mr
 /sps_mission
+
+# PocketBase data
+/pb_data/
+cmd/core/pb_data/

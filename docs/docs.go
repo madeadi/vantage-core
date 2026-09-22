@@ -15,6 +15,26 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/agents": {
+            "get": {
+                "description": "Returns all provisioned agents, each annotated with whether it\ncurrently has a live gRPC stream, plus its reported skills and cameras.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agents"
+                ],
+                "summary": "List agents",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controller.listAgentsResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/agents/register": {
             "post": {
                 "description": "Called by a physical agentsdk on boot to register its identity and skills.\nThe request must include a pre-shared device API key as a Bearer token.",
@@ -42,7 +62,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/cmd_core.registerRequest"
+                            "$ref": "#/definitions/controller.registerRequest"
                         }
                     }
                 ],
@@ -73,67 +93,39 @@ const docTemplate = `{
                     }
                 }
             }
-        },
-        "/api/v1/tasks": {
-            "post": {
-                "description": "Dispatches a task to a named agentsdk. The agentsdk must be online and idle.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "tasks"
-                ],
-                "summary": "Create a task",
-                "parameters": [
-                    {
-                        "description": "Task payload",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/main.createTaskRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/main.createTaskResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "bad request",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "409": {
-                        "description": "agentsdk offline or busy",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "internal server error",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
+        "agentsdk.CameraConfig": {
+            "type": "object",
+            "properties": {
+                "camera_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/agentsdk.CameraType"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "agentsdk.CameraType": {
+            "type": "string",
+            "enum": [
+                "mjpg",
+                "rtsp",
+                "webrtc"
+            ],
+            "x-enum-varnames": [
+                "CameraTypeMJpg",
+                "CameraTypeRtsp",
+                "CameraTypeWebRtc"
+            ]
+        },
         "agentsdk.RegisterResponse": {
             "type": "object",
             "properties": {
-                "agent_id": {
-                    "type": "string"
-                },
                 "grpc_addr": {
                     "type": "string"
                 },
@@ -142,27 +134,81 @@ const docTemplate = `{
                 }
             }
         },
-        "cmd_core.registerRequest": {
-            "type": "object"
-        },
-        "main.createTaskRequest": {
+        "controller.agentView": {
             "type": "object",
             "properties": {
-                "payload": {
-                    "type": "object"
+                "cameras": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/agentsdk.CameraConfig"
+                    }
                 },
-                "robotId": {
+                "id": {
                     "type": "string"
                 },
-                "type": {
+                "name": {
                     "type": "string"
+                },
+                "online": {
+                    "type": "boolean"
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.AgentSkill"
+                    }
                 }
             }
         },
-        "main.createTaskResponse": {
+        "controller.listAgentsResponse": {
             "type": "object",
             "properties": {
-                "task_id": {
+                "agents": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controller.agentView"
+                    }
+                }
+            }
+        },
+        "controller.registerRequest": {
+            "type": "object",
+            "properties": {
+                "cameras": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/agentsdk.CameraConfig"
+                    }
+                },
+                "event_sources": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.EventSource"
+                    }
+                },
+                "skills": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/model.AgentSkill"
+                    }
+                }
+            }
+        },
+        "model.AgentSkill": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "payload": {
+                    "type": "object"
+                }
+            }
+        },
+        "model.EventSource": {
+            "type": "object",
+            "properties": {
+                "name": {
                     "type": "string"
                 }
             }

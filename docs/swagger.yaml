@@ -1,28 +1,80 @@
 basePath: /
 definitions:
-  agent.RegisterResponse:
+  agentsdk.CameraConfig:
     properties:
-      agent_id:
+      camera_id:
         type: string
+      type:
+        $ref: '#/definitions/agentsdk.CameraType'
+      url:
+        type: string
+    type: object
+  agentsdk.CameraType:
+    enum:
+    - mjpg
+    - rtsp
+    - webrtc
+    type: string
+    x-enum-varnames:
+    - CameraTypeMJpg
+    - CameraTypeRtsp
+    - CameraTypeWebRtc
+  agentsdk.RegisterResponse:
+    properties:
       grpc_addr:
         type: string
       token:
         type: string
     type: object
-  cmd_core.registerRequest:
-    type: object
-  main.createTaskRequest:
+  controller.agentView:
     properties:
+      cameras:
+        items:
+          $ref: '#/definitions/agentsdk.CameraConfig'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      online:
+        type: boolean
+      skills:
+        items:
+          $ref: '#/definitions/model.AgentSkill'
+        type: array
+    type: object
+  controller.listAgentsResponse:
+    properties:
+      agents:
+        items:
+          $ref: '#/definitions/controller.agentView'
+        type: array
+    type: object
+  controller.registerRequest:
+    properties:
+      cameras:
+        items:
+          $ref: '#/definitions/agentsdk.CameraConfig'
+        type: array
+      event_sources:
+        items:
+          $ref: '#/definitions/model.EventSource'
+        type: array
+      skills:
+        items:
+          $ref: '#/definitions/model.AgentSkill'
+        type: array
+    type: object
+  model.AgentSkill:
+    properties:
+      name:
+        type: string
       payload:
         type: object
-      robotId:
-        type: string
-      type:
-        type: string
     type: object
-  main.createTaskResponse:
+  model.EventSource:
     properties:
-      task_id:
+      name:
         type: string
     type: object
 host: localhost:8080
@@ -32,12 +84,27 @@ info:
   title: VantageOS Core API
   version: "1.0"
 paths:
+  /agents:
+    get:
+      description: |-
+        Returns all provisioned agents, each annotated with whether it
+        currently has a live gRPC stream, plus its reported skills and cameras.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controller.listAgentsResponse'
+      summary: List agents
+      tags:
+      - agents
   /agents/register:
     post:
       consumes:
       - application/json
       description: |-
-        Called by a physical agent on boot to register its identity and skills.
+        Called by a physical agentsdk on boot to register its identity and skills.
         The request must include a pre-shared device API key as a Bearer token.
       parameters:
       - description: Bearer <device-api-key>
@@ -50,14 +117,14 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/cmd_core.registerRequest'
+          $ref: '#/definitions/controller.registerRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/agent.RegisterResponse'
+            $ref: '#/definitions/agentsdk.RegisterResponse'
         "400":
           description: bad request
           schema:
@@ -73,39 +140,4 @@ paths:
       summary: Register an agentsdk
       tags:
       - agents
-  /api/v1/tasks:
-    post:
-      consumes:
-      - application/json
-      description: Dispatches a task to a named agentsdk. The agentsdk must be online and
-        idle.
-      parameters:
-      - description: Task payload
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/main.createTaskRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/main.createTaskResponse'
-        "400":
-          description: bad request
-          schema:
-            type: string
-        "409":
-          description: agentsdk offline or busy
-          schema:
-            type: string
-        "500":
-          description: internal server error
-          schema:
-            type: string
-      summary: Create a task
-      tags:
-      - tasks
 swagger: "2.0"

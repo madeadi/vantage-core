@@ -11,9 +11,9 @@ type LayoutConfig struct {
 }
 
 type CameraConfig struct {
-	CameraID string     `yaml:"camera_id"`
-	Type     CameraType `yaml:"type"`
-	Url      string     `yaml:"url"`
+	CameraID string     `yaml:"camera_id" json:"camera_id"`
+	Type     CameraType `yaml:"type" json:"type"`
+	Url      string     `yaml:"url" json:"url"`
 }
 
 type CameraType string

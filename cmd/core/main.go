@@ -13,12 +13,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"vantageos-core/cmd/core/config"
+	controller2 "vantageos-core/cmd/core/controller"
+	grpc2 "vantageos-core/cmd/core/grpc"
+	"vantageos-core/cmd/core/repository"
+	"vantageos-core/cmd/core/service"
 	_ "vantageos-core/docs"
-	"vantageos-core/internal/core/config"
-	controller2 "vantageos-core/internal/core/controller"
-	grpc2 "vantageos-core/internal/core/grpc"
-	"vantageos-core/internal/core/repository"
-	"vantageos-core/internal/core/service"
 	agentv1 "vantageos-core/proto/agent/v1"
 	"vantageos-core/proto/api/v1/apiv1connect"
 	missionv1 "vantageos-core/proto/mission/v1"
@@ -39,14 +39,43 @@ func main() {
 		return
 	}
 
-	var allowedAgents []service.AllowedAgent
-	for _, agt := range cfg.Agents {
-		allowedAgents = append(allowedAgents, service.AllowedAgent{
-			AgentID: agt.ID,
-			Key:     agt.Key,
-			Name:    agt.Name,
-		})
+	if !cfg.PocketBase.Enabled {
+		slog.Error("pocketbase must be enabled: agents, missions and layouts are now sourced from PocketBase collections")
+		return
 	}
+
+	pbApp, err := setupPocketBase(cfg.PocketBase)
+	if err != nil {
+		slog.Error("failed to start pocketbase", "err", err)
+		return
+	}
+
+	// Delegate any extra args to the PocketBase root command (e.g.
+	// `migrate create ...`, `migrate down`, `superuser create ...`) and exit.
+	if args := flag.Args(); len(args) > 0 {
+		pbApp.RootCmd.SetArgs(args)
+		if err := pbApp.RootCmd.Execute(); err != nil {
+			slog.Error("command failed", "err", err)
+		}
+		return
+	}
+
+	allowedAgents, err := loadAllowedAgents(pbApp)
+	if err != nil {
+		slog.Error("failed to load agents from pocketbase", "err", err)
+		return
+	}
+	missions, err := loadMissions(pbApp)
+	if err != nil {
+		slog.Error("failed to load missions from pocketbase", "err", err)
+		return
+	}
+	agentLayouts, err := loadAgentLayouts(pbApp)
+	if err != nil {
+		slog.Error("failed to load agent_layouts from pocketbase", "err", err)
+		return
+	}
+
 	grpcListenAddr := cfg.GRPCListenAddr
 	if grpcListenAddr == "" {
 		grpcListenAddr = ":9090"
@@ -66,7 +95,7 @@ func main() {
 	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
 	dispatcher := service.NewTaskDispatcher(ar, tRepo)
 
-	mr := service.NewMissionRegistry(cfg.Missions)
+	mr := service.NewMissionRegistry(missions)
 	mc := controller2.NewMissionController(mr, grpcAdvertiseAddr)
 	ac := controller2.NewAgentController(ar)
 
@@ -98,8 +127,13 @@ func main() {
 	telemetry := service.NewTelemetryListener()
 
 	mtm := service.NewMissionTaskManager(dispatcher, mr, tRepo)
-	grpcSrv := grpc2.NewAgentGRPCServer(ar, telemetry, poseListener, cfg.AgentLayouts, mtm, dispatcher)
+	grpcSrv := grpc2.NewAgentGRPCServer(ar, telemetry, poseListener, agentLayouts, mtm, dispatcher)
 	agentv1.RegisterAgentServiceServer(grpcServer, grpcSrv)
+
+	// Re-dispatch config-collection edits into the registries without a restart,
+	// then start serving the PocketBase admin UI + REST API.
+	watchConfig(pbApp, ar, mr, grpcSrv)
+	go servePocketBase(pbApp, cfg.PocketBase.ListenAddr)
 
 	missionGrpcSrv := grpc2.NewMissionGrpc(mr, mtm)
 	missionv1.RegisterMissionServiceServer(grpcServer, missionGrpcSrv)

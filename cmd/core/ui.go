@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"vantageos-core/internal/core/model"
-	"vantageos-core/internal/core/repository"
-	"vantageos-core/internal/core/service"
+	"vantageos-core/cmd/core/model"
+	"vantageos-core/cmd/core/repository"
+	"vantageos-core/cmd/core/service"
 	"vantageos-core/pkg/agentsdk"
 )
 

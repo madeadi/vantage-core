@@ -1,43 +1,13 @@
+# Bootstrap settings only. Agents, missions, layouts and agent↔layout
+# transforms now live in PocketBase collections (agents, missions, layouts,
+# agent_layouts) and are edited via the admin UI at http://127.0.0.1:8090/_/.
+# Core loads them at startup and live-reloads on every create/update/delete.
+# On first boot each empty collection is seeded with the previous dev fixtures.
+
 grpc_listen_addr: ":9090"
 grpc_advertise_addr: "localhost:9090"
-agents:
-  - id: smallbot
-    key: dev-key-abc123
-    name: Small Bot
-  - id: 70000000-0000-0000-0000-000000000001
-    key: sps-bot-1
-    name: SPS MR 1
-  - id: 70000000-0000-0000-0000-000000000002
-    key: sps-bot-2
-    name: SPS MR 2
 
-missions:
-  - id: from_kitchen
-    name: SPS From Kitchen
-    key: key_from_kitchen
-  - id: to_kitchen
-    name: SPS To Kitchen
-    key: key_to_kitchen
-
-layouts:
-  - id: layout1
-    name: Layout 1
-    coordinate_system: pixel
-  - id: layout
-    name: Layout 2
-    coordinate_system: latlon
-  - id: 40000000-0000-0000-0000-000000000001
-    name: SPS Kitchen
-    coordinate_system: pixel
-  - id: 40000000-0000-0000-0000-000000000002
-    name: SPS Institution 1
-    coordinate_system: pixel
-
-agent_layouts:
-  - layout_id: 40000000-0000-0000-0000-000000000001
-    agent_id: 70000000-0000-0000-0000-000000000002
-    north_offset: 0
-    transformation_matrix:
-        - [50.0, 0.0, 885.0]
-        - [2.764757726692997e-15, 49.99999999999999, 436.5]
-        - [0.0, 0.0, 1.0]
+pocketbase:
+  enabled: true
+  listen_addr: "127.0.0.1:8090"
+  data_dir: "pb_data"
