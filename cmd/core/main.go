@@ -115,7 +115,7 @@ func main() {
 	// with mqtt.enabled: false in its config runs exactly as it did before
 	// this feature existed.
 	if cfg.MQTT.Enabled {
-		startTelemetryIngest(cfg.MQTT)
+		startTelemetryIngest(cfg.MQTT, pbApp, schemaRegistry)
 	}
 
 	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)

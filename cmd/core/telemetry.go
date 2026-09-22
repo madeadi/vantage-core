@@ -6,9 +6,13 @@ import (
 	"time"
 
 	"vantageos-core/cmd/core/config"
+	"vantageos-core/cmd/core/telemetry/events"
 	"vantageos-core/cmd/core/telemetry/ingest"
+	"vantageos-core/cmd/core/telemetry/registry"
+	"vantageos-core/cmd/core/telemetry/validate"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/pocketbase/pocketbase/core"
 )
 
 // ingestQueueSize is sized for ~100s of headroom at this project's
@@ -17,7 +21,9 @@ import (
 const ingestQueueSize = 1024
 
 // startTelemetryIngest connects core's own mqtt client and starts the
-// telemetry ingest daemon (cmd/core/telemetry/ingest) in the background.
+// telemetry ingest daemon (cmd/core/telemetry/ingest) in the background,
+// wiring its output through validate.Validator and events.Throttler to
+// agent_events (via events.PocketBaseSink).
 //
 // Connection failures are logged, not fatal: MQTT telemetry is additive to
 // the existing gRPC agent path, so a broker that's down or misconfigured
@@ -26,8 +32,26 @@ const ingestQueueSize = 1024
 // the first failure, and OnConnect re-subscribes on every connect (including
 // a reconnect), which is a harmless no-op if the subscription is already
 // live server-side.
-func startTelemetryIngest(cfg config.MQTTConfig) *ingest.Daemon {
+func startTelemetryIngest(cfg config.MQTTConfig, app core.App, schemaRegistry *registry.Registry) *ingest.Daemon {
 	daemon := ingest.New(cfg.TopicPrefix, ingestQueueSize)
+
+	validator := validate.New(schemaRegistry)
+	throttler := events.New(events.NewPocketBaseSink(app), events.Config{})
+
+	daemon.AddListener(func(m ingest.Message) {
+		var violation *validate.Violation
+		switch m.Kind {
+		case ingest.KindTelemetry:
+			violation = validator.Validate(m.AgentID, m.Payload)
+		case ingest.KindTelemetrySchema:
+			violation = validator.CheckSchemaAnnouncement(m.AgentID, m.Payload)
+		default:
+			return
+		}
+		if violation != nil {
+			throttler.Record(*violation)
+		}
+	})
 
 	opts := mqtt.NewClientOptions().
 		AddBroker(cfg.Broker).
