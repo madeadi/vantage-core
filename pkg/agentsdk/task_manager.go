@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sync"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -16,19 +17,38 @@ type TaskHandler interface {
 
 type TaskManager struct {
 	handlers     map[string]*TaskHandler
-	mqtt         mqtt.Client
 	NewTaskTopic string
+
+	mu   sync.Mutex // guards mqtt
+	mqtt mqtt.Client
 
 	ctx context.Context
 }
 
-func NewTaskManager(ctx context.Context, mqttClient mqtt.Client, newTaskTopic string) *TaskManager {
+// NewTaskManager returns a TaskManager with no mqtt client attached yet —
+// call SetClient once the agent has connected, before RunNewTaskListener.
+func NewTaskManager(ctx context.Context, newTaskTopic string) *TaskManager {
 	return &TaskManager{
 		handlers:     make(map[string]*TaskHandler),
-		mqtt:         mqttClient,
 		NewTaskTopic: newTaskTopic,
 		ctx:          ctx,
 	}
+}
+
+// SetClient attaches the mqtt client RunNewTaskListener and any future
+// resubscription will use. Safe to call concurrently with client(), but not
+// intended to be called concurrently with itself from multiple goroutines
+// for the same TaskManager.
+func (t *TaskManager) SetClient(c mqtt.Client) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.mqtt = c
+}
+
+func (t *TaskManager) client() mqtt.Client {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.mqtt
 }
 
 func (t *TaskManager) RegisterHandler(handler TaskHandler) *TaskManager {
@@ -60,9 +80,14 @@ func (t *TaskManager) listenNewTask(_ mqtt.Client, msg mqtt.Message) {
 }
 
 // RunNewTaskListener subscribes to NewTaskTopic and routes incoming tasks to
-// registered handlers via listenNewTask.
+// registered handlers via listenNewTask. Call SetClient first.
 func (t *TaskManager) RunNewTaskListener() error {
-	token := t.mqtt.Subscribe(t.NewTaskTopic, 0, t.listenNewTask)
+	client := t.client()
+	if client == nil {
+		return errNoClient
+	}
+
+	token := client.Subscribe(t.NewTaskTopic, 1, t.listenNewTask)
 	token.Wait()
 	if err := token.Error(); err != nil {
 		slog.Error("failed to subscribe to new task topic", "topic", t.NewTaskTopic, "error", err)

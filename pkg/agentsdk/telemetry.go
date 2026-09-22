@@ -24,7 +24,11 @@ type Telemetry[T any] struct {
 }
 
 // NewTelemetry derives T's schema once and returns a Telemetry ready to
-// publish values of T for agent.
+// publish values of T for agent. It also registers a hook (via
+// agent.OnConnect) that re-announces the schema on every connect and
+// reconnect, so the retained announcement survives a broker restart that
+// clears its retained-message store. Call NewTelemetry before agent.Register
+// so that hook is in place for the first connect too.
 func NewTelemetry[T any](agent *Agent) (*Telemetry[T], error) {
 	if agent == nil {
 		return nil, fmt.Errorf("agentsdk: NewTelemetry: agent must not be nil")
@@ -33,7 +37,14 @@ func NewTelemetry[T any](agent *Agent) (*Telemetry[T], error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Telemetry[T]{agent: agent, schema: schema}, nil
+
+	t := &Telemetry[T]{agent: agent, schema: schema}
+	agent.OnConnect(func() {
+		if err := t.PublishSchema(); err != nil {
+			slog.Error("failed to publish telemetry schema", "agent_id", agent.ID, "error", err)
+		}
+	})
+	return t, nil
 }
 
 // SchemaJSON returns T's derived JSON Schema, as announced by PublishSchema.
@@ -46,8 +57,9 @@ func (t *Telemetry[T]) SchemaHash() string { return t.schema.Hash }
 // DeriveTelemetrySchema) on the agent's telemetry-schema topic, retained so
 // a late-connecting or restarted daemon still sees it on subscribe.
 func (t *Telemetry[T]) PublishSchema() error {
-	if t.agent.Client == nil {
-		return fmt.Errorf("agentsdk: PublishSchema: agent %q is not connected", t.agent.ID)
+	client := t.agent.mqttClient()
+	if client == nil {
+		return fmt.Errorf("agentsdk: PublishSchema: agent %q: %w", t.agent.ID, errNoClient)
 	}
 
 	body, err := json.Marshal(TelemetrySchemaAnnouncement{
@@ -60,15 +72,16 @@ func (t *Telemetry[T]) PublishSchema() error {
 		return fmt.Errorf("agentsdk: marshal schema announcement: %w", err)
 	}
 
-	token := t.agent.Client.Publish(t.agent.Topic.TelemetrySchema(), 1, true, body)
+	token := client.Publish(t.agent.Topic.TelemetrySchema(), 1, true, body)
 	token.Wait()
 	return token.Error()
 }
 
 // Publish marshals v as-is and publishes it on the agent's telemetry topic.
 func (t *Telemetry[T]) Publish(v T) error {
-	if t.agent.Client == nil {
-		return fmt.Errorf("agentsdk: Publish: agent %q is not connected", t.agent.ID)
+	client := t.agent.mqttClient()
+	if client == nil {
+		return fmt.Errorf("agentsdk: Publish: agent %q: %w", t.agent.ID, errNoClient)
 	}
 
 	body, err := json.Marshal(v)
@@ -76,7 +89,7 @@ func (t *Telemetry[T]) Publish(v T) error {
 		return fmt.Errorf("agentsdk: marshal telemetry: %w", err)
 	}
 
-	token := t.agent.Client.Publish(t.agent.Topic.Telemetry(), 0, false, body)
+	token := client.Publish(t.agent.Topic.Telemetry(), 0, false, body)
 	token.Wait()
 	if err := token.Error(); err != nil {
 		return err

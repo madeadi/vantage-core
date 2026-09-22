@@ -3,6 +3,8 @@ package agentsdk
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -17,9 +19,9 @@ const (
 	StatusRegistered Status = "registered"
 )
 
-type TelemetryPublisher interface {
-	PublishTelemetry() error
-}
+// errNoClient is returned by operations that need a connected mqtt client
+// before one has been attached (see Agent.Register, TaskManager.SetClient).
+var errNoClient = errors.New("agentsdk: not connected")
 
 type Agent struct {
 	ID     string `json:"agent_id"`
@@ -29,14 +31,26 @@ type Agent struct {
 	Client mqtt.Client        `json:"-"`
 	opts   mqtt.ClientOptions `json:"-"`
 
-	mu sync.Mutex `json:"-"`
-
-	stopTelemetryChan chan struct{} `json:"-"`
+	mu             sync.Mutex `json:"-"`
+	connectedOnce  bool       `json:"-"` // guards the one-time registered event + task listener setup
+	onConnectFuncs []func()   `json:"-"`
 
 	TaskManager *TaskManager
 }
 
+// NewAgent builds an Agent for id, using CleanSession=false so the broker
+// keeps its subscriptions (and any queued QoS-1+ messages) across a dropped
+// connection and automatic reconnect — see SetAutoReconnect/SetConnectRetry
+// below, and specs/mqtt_telemetry.specs.md's task-dispatch notes on why a
+// persistent session is preferable to resubscribing by hand on every
+// reconnect.
 func NewAgent(id string, topicPrefix string, broker string, username string, password string) *Agent {
+	topic, err := NewTopic(topicPrefix, id)
+	if err != nil {
+		slog.Error("invalid agent topic", "error", err)
+		return nil
+	}
+
 	willPayload, err := json.Marshal(EventPayload{
 		ID:        uuid.New().String(),
 		Timestamp: time.Now(),
@@ -47,10 +61,10 @@ func NewAgent(id string, topicPrefix string, broker string, username string, pas
 		return nil
 	}
 
-	topic, err := NewTopic(topicPrefix, id)
-	if err != nil {
-		slog.Error("invalid agent topic", "error", err)
-		return nil
+	a := &Agent{
+		ID:          id,
+		Topic:       topic,
+		TaskManager: NewTaskManager(context.Background(), topic.NewTask()),
 	}
 
 	opts := mqtt.NewClientOptions().
@@ -61,52 +75,104 @@ func NewAgent(id string, topicPrefix string, broker string, username string, pas
 		SetAutoReconnect(true).
 		SetConnectRetry(true).
 		SetConnectTimeout(10*time.Second).
-		SetBinaryWill(topic.Event(), willPayload, 0, true)
+		SetCleanSession(false).
+		SetBinaryWill(topic.Event(), willPayload, 1, true)
 
-	opts.OnConnect = func(c mqtt.Client) {
-		slog.Info("mqtt connected", "broker", broker)
+	opts.OnConnect = func(mqtt.Client) {
+		a.handleConnect()
 	}
-	opts.OnConnectionLost = func(c mqtt.Client, err error) {
-		slog.Error("mqtt connection lost", "error", err)
+	opts.OnConnectionLost = func(_ mqtt.Client, err error) {
+		slog.Error("mqtt connection lost", "agent_id", a.ID, "error", err)
 	}
 
-	return &Agent{
-		ID:          id,
-		Topic:       topic,
-		opts:        *opts,
-		TaskManager: NewTaskManager(context.Background(), nil, topic.NewTask()),
+	a.opts = *opts
+	return a
+}
+
+// OnConnect registers fn to run every time the agent's connection becomes
+// active — the first connect and every automatic reconnect after a drop.
+// Call it before Register to also run fn on the first connect; a call after
+// Register may race the first connect and miss it. NewTelemetry uses this to
+// keep an agent's advisory schema announcement current after a broker
+// restart clears its retained state.
+func (a *Agent) OnConnect(fn func()) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.onConnectFuncs = append(a.onConnectFuncs, fn)
+}
+
+// handleConnect runs on every connect and reconnect. It publishes the
+// "online" event every time, and — only the first time this agent instance
+// connects — publishes "registered" and starts the task listener. With
+// CleanSession=false (see NewAgent), the broker keeps that subscription
+// across later reconnects, so it does not need to be re-established.
+func (a *Agent) handleConnect() {
+	slog.Info("mqtt connected", "agent_id", a.ID)
+
+	if err := a.PublishEvent(EventOnline, "", nil); err != nil {
+		slog.Error("publish online event failed", "agent_id", a.ID, "error", err)
+	}
+
+	a.mu.Lock()
+	first := !a.connectedOnce
+	a.connectedOnce = true
+	hooks := append([]func(){}, a.onConnectFuncs...)
+	a.mu.Unlock()
+
+	if first {
+		if err := a.PublishEvent(EventRegistered, "", nil); err != nil {
+			slog.Error("publish registered event failed", "agent_id", a.ID, "error", err)
+		}
+
+		a.TaskManager.SetClient(a.mqttClient())
+		if err := a.TaskManager.RunNewTaskListener(); err != nil {
+			slog.Error("new task listener failed", "agent_id", a.ID, "error", err)
+		}
+	}
+
+	for _, fn := range hooks {
+		fn()
 	}
 }
 
+// mqttClient returns the agent's current mqtt client, or nil if Register has
+// not been called yet.
+func (a *Agent) mqttClient() mqtt.Client {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.Client
+}
+
+// Register connects the agent in the background and returns immediately —
+// connecting can block indefinitely, since SetConnectRetry keeps retrying
+// until it succeeds. Everything that needs to happen once connected
+// (lifecycle events, the task listener, any OnConnect hooks) runs from
+// handleConnect, which fires on this first connect and on every
+// automatic reconnect after a dropped connection.
 func (a *Agent) Register() {
 	a.mu.Lock()
 	client := mqtt.NewClient(&a.opts)
 	a.Client = client
 	a.mu.Unlock()
 
-	// Connecting can block indefinitely (SetConnectRetry keeps retrying until
-	// it succeeds), so do it in the background instead of blocking the caller.
 	go func() {
 		token := client.Connect()
 		token.Wait()
 		if err := token.Error(); err != nil {
-			slog.Error("mqtt connect failed", "error", err)
-			return
-		}
-
-		if err := a.PublishEvent(EventRegistered,  "", nil); err != nil {
-			slog.Error("publish registered event failed", "error", err)
-		}
-
-		slog.Debug("Run new task listener", "id", a.ID)
-		a.TaskManager.mqtt = client
-		if err := a.TaskManager.RunNewTaskListener(); err != nil {
-			slog.Error("new task listener failed", "error", err)
+			slog.Error("mqtt connect failed", "agent_id", a.ID, "error", err)
 		}
 	}()
 }
 
-func (a *Agent) PublishEvent(eventType EventType, reason string, payload []byte,) error {
+// PublishEvent publishes an agent lifecycle event (see EventType), retained
+// so a subscriber that connects after the fact still sees the agent's most
+// recent state.
+func (a *Agent) PublishEvent(eventType EventType, reason string, payload []byte) error {
+	client := a.mqttClient()
+	if client == nil {
+		return fmt.Errorf("agentsdk: PublishEvent: agent %q: %w", a.ID, errNoClient)
+	}
+
 	b, err := json.Marshal(EventPayload{
 		ID:        uuid.New().String(),
 		AgentID:   a.ID,
@@ -118,57 +184,29 @@ func (a *Agent) PublishEvent(eventType EventType, reason string, payload []byte,
 	if err != nil {
 		return err
 	}
-	token := a.Client.Publish(a.Topic.Event(), 0, false, b)
 
-	slog.Debug("Publishing event", "topic", a.Topic.Event(), "eventType", eventType)
+	token := client.Publish(a.Topic.Event(), 1, true, b)
+	slog.Debug("publishing event", "agent_id", a.ID, "topic", a.Topic.Event(), "event_type", eventType)
 	token.Wait()
 	return token.Error()
 }
 
-func (a *Agent) PublishTelemetrySchema() error {
-	slog.Info("PublishTelemetrySchema not implemented")
-
-	return nil
-}
-
+// Stop publishes an offline event and disconnects, unconditionally — a
+// never-connected agent (Client is nil) is a no-op rather than an error,
+// since there is nothing to publish to or disconnect from.
 func (a *Agent) Stop() {
+	if a.mqttClient() == nil {
+		return
+	}
+
+	if err := a.PublishEvent(EventOffline, "", nil); err != nil {
+		slog.Error("publish offline event failed", "agent_id", a.ID, "error", err)
+	}
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
-
-	if a.stopTelemetryChan == nil {
-		return
-	} else {
-		close(a.stopTelemetryChan)
-		a.stopTelemetryChan = nil
-	}
-
-	a.PublishEvent(EventOffline, "", nil)
-
-	a.Client.Disconnect(1000)
-	a.Client = nil
-}
-
-func (a *Agent) StartTelemetryLoop(duration time.Duration, publisher TelemetryPublisher) {
-	a.mu.Lock()
-	if a.stopTelemetryChan != nil {
-		a.mu.Unlock()
-		return
-	}
-	stopTelemetry := make(chan struct{})
-	a.stopTelemetryChan = stopTelemetry
-	a.mu.Unlock()
-
-	ticker := time.NewTicker(duration)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-stopTelemetry:
-			return
-		case <-ticker.C:
-			if err := publisher.PublishTelemetry(); err != nil {
-				slog.Error("failed to publish telemetry", "error", err)
-			}
-		}
+	if a.Client != nil {
+		a.Client.Disconnect(1000)
+		a.Client = nil
 	}
 }
