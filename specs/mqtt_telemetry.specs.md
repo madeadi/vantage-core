@@ -21,6 +21,8 @@ they think they are sending — live, and historically with replay.
   single validation contract. An agent's own declared schema never overrides it.
 - **MQTT replaces gRPC.** The `proto/agent/v1` `AgentService` and the `:9090`
   listener are removed once all five RPCs have MQTT/REST equivalents.
+- **Agent-id-first topic layout.** The agent ID is one segment, high in the
+  hierarchy, so broker ACL patterns can substitute it. See below.
 
 **Consequences of "group schema wins" — these shape Phase A:**
 
@@ -46,26 +48,52 @@ they think they are sending — live, and historically with replay.
    connect time instead of after N bad messages — and it is the main thing that
    makes the developer-facing UI worth building.
 
-**D1 — Topic layout (still open, recommend deciding in Step 1).** Today:
-`<prefix>/agent/telemetry/<id>` and `<prefix>/agent/telemetry/schema/<id>`.
-Schema is nested *under* telemetry, so `.../telemetry/#` mixes both streams, an
-agent whose ID is literally `schema` collides, and prefix-based broker ACLs
-cannot express "agent X may write its own topics". Recommend agent-id-first:
+## Topic layout (settled)
+
+The old layout nested schema *under* telemetry
+(`<prefix>/agent/telemetry/schema/<id>`), so `.../telemetry/#` mixed both
+streams, an agent whose ID was literally `schema` collided, and the agent ID sat
+at varying depths — which meant broker ACL patterns could not substitute it.
+Replaced by:
+
+| Topic | Publisher | Retain | QoS |
+|---|---|---|---|
+| `<prefix>/agent/<id>/telemetry` | agent | no | 0 |
+| `<prefix>/agent/<id>/telemetry-schema` | agent | **yes** | 1 |
+| `<prefix>/agent/<id>/pose` | agent | no | 0 |
+| `<prefix>/agent/<id>/event` | agent (+ broker LWT) | **yes** | 1 |
+| `<prefix>/agent/<id>/task/new` | **core** | no | 1 |
+| `<prefix>/agent/<id>/task/<taskID>/status` | agent | no | 1 |
+
+Core subscribes `<prefix>/agent/+/telemetry`, `+/telemetry-schema`, `+/pose`,
+`+/event`, and `<prefix>/agent/+/task/+/status`.
+
+This is a breaking change taken now, while there are zero deployed publishers.
+No compatibility shim, no dual-topic period — Step 1 changes the builders and
+that is the whole migration.
+
+**ACL correction.** An earlier draft claimed "one rule per agent:
+`<prefix>/agent/<id>/#`". That is wrong, and the reason is worth recording: a
+single blanket rule grants the agent *write* on everything under its prefix,
+including its own `task/new` — letting an agent dispatch tasks to itself.
+Reads and writes must be split. With the broker username set to the agent ID
+(Step 15), Mosquitto patterns substitute `%u`:
 
 ```
-<prefix>/agent/<id>/telemetry
-<prefix>/agent/<id>/telemetry-schema      (retained, advisory)
-<prefix>/agent/<id>/pose
-<prefix>/agent/<id>/event                 (retained, LWT)
-<prefix>/agent/<id>/task/new
-<prefix>/agent/<id>/task/<taskID>/status
+pattern write <prefix>/agent/%u/telemetry
+pattern write <prefix>/agent/%u/telemetry-schema
+pattern write <prefix>/agent/%u/pose
+pattern write <prefix>/agent/%u/event
+pattern write <prefix>/agent/%u/task/+/status
+pattern read  <prefix>/agent/%u/task/new
 ```
 
-One ACL rule per agent: `<prefix>/agent/<id>/#`. Breaking change — cheapest now,
-while there are zero deployed publishers, and Phase B adds three more topics
-under the same prefix.
+Six patterns rather than one, but each is a single static rule covering every
+agent — no per-agent ACL entries to generate or garbage-collect. That is the
+actual win from putting the ID in a fixed position, and it is unavailable under
+the old layout at any number of rules.
 
-**D4 — Two datastores.** Events + config stay in PocketBase (low volume, gives
+**Two datastores.** Events + config stay in PocketBase (low volume, gives
 the UI realtime for free). Telemetry rows go to Postgres/TimescaleDB. Real
 operational cost — two DBs to run and back up — but telemetry in SQLite will not
 survive replay at any useful rate.
@@ -106,13 +134,18 @@ Bugs found while surveying:
 
 ### 1. Topic layout + retained/QoS semantics
 
-Rework `topic.go` per **D1**, including the Phase B topics so the layout is
-settled once. Validate `topic_prefix` (no leading/trailing slash, no wildcards);
-reject agent IDs containing `+`, `#`, `/`.
+Rework `topic.go` to the settled layout above, including the Phase B topics so
+it is done once. Validate `topic_prefix` (no leading/trailing slash, no
+wildcards); reject agent IDs containing `+`, `#`, `/`.
 
-Document retain/QoS per topic in the file: schema **retained QoS 1** (advisory),
-telemetry and pose **not retained QoS 0**, events **retained QoS 1**, task and
-task-status **QoS 1**.
+Agent-ID validation is load-bearing now, not hygiene: the ID is a topic segment
+*and* the ACL substitution key, so an ID containing `/` or a wildcard would let
+one agent's credentials match another's topics. Validate on the **core** side at
+registration too (Step 15) — an agent validating its own ID proves nothing.
+
+Carry the retain/QoS column from the table into the builders' doc comments, and
+add subscriber-side helpers for the wildcard patterns core needs so the two
+sides cannot drift.
 
 *Files:* `pkg/agentsdk/topic.go` + table-driven test
 *Done when:* builders emit the new layout and reject malformed IDs.
@@ -400,10 +433,13 @@ Step 18. Telemetry and pose are read-only and can cut over directly.
 
 `POST /agents/register` currently returns `{token, grpc_url}`. Replace with
 `{broker_url, username, password, topic_prefix, agent_id}`, keeping the existing
-`agents.key` device-key model as the bootstrap secret. Issue **per-agent broker
-credentials** so the **D1** ACL (`<prefix>/agent/<id>/#`) actually prevents one
-agent publishing as another — a shared broker account makes agent spoofing
-trivial, since the agent ID is just a topic segment.
+`agents.key` device-key model as the bootstrap secret.
+
+Issue **per-agent broker credentials with the username set to the agent ID** —
+that is what makes the `%u` ACL patterns above resolve. A shared broker account
+makes spoofing trivial, since the agent ID is otherwise just a topic segment any
+publisher can type. Re-validate the agent ID here (Step 1) before it becomes a
+credential.
 
 *Files:* `internal/core/controller/agent_registry_http.go`, `pkg/agentsdk/registration.go`
 *Done when:* an agent bootstraps from a device key to a working scoped broker
@@ -468,8 +504,10 @@ dual-run path, and the now-unused gRPC deps from `go.mod`. Update root
 - `core.config.yaml`: `mqtt:` block (broker, credentials, topic prefix, client
   id, QoS) and `telemetry:` block (persistence enabled, DSN, batch size, flush
   interval, retention, throttle window). Bootstrap-only, per `CLAUDE.md`.
-- `docker-compose.yml` for local dev: Mosquitto + TimescaleDB, with an ACL file
-  demonstrating the per-agent `<prefix>/agent/<id>/#` rule.
+- `docker-compose.yml` for local dev: Mosquitto + TimescaleDB, shipping the
+  six-pattern ACL file above so the read/write split is exercised in dev rather
+  than discovered in production. Include a test asserting an agent *cannot*
+  publish to its own `task/new`.
 - Integration test: embedded broker + ephemeral Timescale; agent publishes good
   then bad telemetry; assert throttling and row landing.
 
@@ -494,10 +532,10 @@ rate — that is the evidence that moving the control path is safe.
 
 ## Open questions
 
-1. **D1** — adopt the agent-id-first topic layout? Recommend yes, now.
-2. Retention: how long does raw telemetry live before the continuous aggregate
+1. Retention: how long does raw telemetry live before the continuous aggregate
    takes over? Drives disk sizing.
-3. Multi-tenant: is `topic_prefix` per-deployment or per-customer? Determines
-   whether `agent_id` must be globally unique.
-4. Does the UI need to *author* group schemas beyond a JSON textarea (Step 2's
+2. Multi-tenant: is `topic_prefix` per-deployment or per-customer? Determines
+   whether `agent_id` must be globally unique — and, now that the agent ID is
+   the broker username, whether credentials are unique across tenants too.
+3. Does the UI need to *author* group schemas beyond a JSON textarea (Step 2's
    CLI covers the derive-from-Go path, but not a hand-written contract)?
