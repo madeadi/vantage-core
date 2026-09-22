@@ -18,14 +18,21 @@ package migrations
 // purpose: a migration must keep doing the same thing forever, so it must not
 // depend on constants elsewhere in the app that may later be renamed.
 const (
-	collUsers        = "users"
-	collAgents       = "agents"
-	collAgentGroups  = "agent_groups"
-	collMissions     = "missions"
-	collLayouts      = "layouts"
-	collAgentLayouts = "agent_layouts"
+	collUsers             = "users"
+	collAgents            = "agents"
+	collAgentGroups       = "agent_groups"
+	collMissions          = "missions"
+	collLayouts           = "layouts"
+	collAgentLayouts      = "agent_layouts"
+	collAgentEvents       = "agent_events"
+	collTelemetrySettings = "telemetry_settings"
 )
 
 // adminOnlyRule grants API access only to an authenticated user whose role is
 // "admin". Superusers bypass collection rules entirely.
 const adminOnlyRule = `@request.auth.role = "admin"`
+
+// operatorReadRule additionally grants read access (list/view) to a user whose
+// role is "operator" — used by collections an agent developer needs to read
+// but not edit, such as agent_events.
+const operatorReadRule = `@request.auth.role = "admin" || @request.auth.role = "operator"`

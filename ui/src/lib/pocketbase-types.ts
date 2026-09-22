@@ -11,11 +11,13 @@ export const Collections = {
 	Mfas: "_mfas",
 	Otps: "_otps",
 	Superusers: "_superusers",
+	AgentEvents: "agent_events",
 	AgentGroups: "agent_groups",
 	AgentLayouts: "agent_layouts",
 	Agents: "agents",
 	Layouts: "layouts",
 	Missions: "missions",
+	TelemetrySettings: "telemetry_settings",
 	Users: "users",
 } as const
 export type Collections = typeof Collections[keyof typeof Collections]
@@ -98,10 +100,32 @@ export type SuperusersRecord = {
 	verified?: boolean
 }
 
-export type AgentGroupsRecord = {
+export const AgentEventsSeverityOptions = {
+	"info": "info",
+	"warning": "warning",
+	"error": "error",
+} as const
+export type AgentEventsSeverityOptions = typeof AgentEventsSeverityOptions[keyof typeof AgentEventsSeverityOptions]
+export type AgentEventsRecord<Tsample = unknown> = {
+	agent_id: string
+	count: number
+	detail?: string
+	first_seen: IsoDateString
+	id: string
+	kind?: string
+	last_seen: IsoDateString
+	sample?: null | Tsample
+	severity: AgentEventsSeverityOptions
+	signature?: string
+	type: string
+}
+
+export type AgentGroupsRecord<Ttelemetry_mapping = unknown, Ttelemetry_schema = unknown> = {
 	description?: string
 	id: string
 	name: string
+	telemetry_mapping?: null | Ttelemetry_mapping
+	telemetry_schema?: null | Ttelemetry_schema
 }
 
 export type AgentLayoutsRecord<Ttransformation_matrix = unknown> = {
@@ -141,6 +165,12 @@ export type MissionsRecord = {
 	name?: string
 }
 
+export type TelemetrySettingsRecord = {
+	agent_group: RecordIdString
+	id: string
+	persist_enabled?: boolean
+}
+
 export const UsersRoleOptions = {
 	"admin": "admin",
 	"operator": "operator",
@@ -168,11 +198,13 @@ export type ExternalauthsResponse<Texpand = unknown> = Required<ExternalauthsRec
 export type MfasResponse<Texpand = unknown> = Required<MfasRecord> & BaseSystemFields<Texpand>
 export type OtpsResponse<Texpand = unknown> = Required<OtpsRecord> & BaseSystemFields<Texpand>
 export type SuperusersResponse<Texpand = unknown> = Required<SuperusersRecord> & AuthSystemFields<Texpand>
-export type AgentGroupsResponse<Texpand = unknown> = Required<AgentGroupsRecord> & BaseSystemFields<Texpand>
+export type AgentEventsResponse<Tsample = unknown, Texpand = unknown> = Required<AgentEventsRecord<Tsample>> & BaseSystemFields<Texpand>
+export type AgentGroupsResponse<Ttelemetry_mapping = unknown, Ttelemetry_schema = unknown, Texpand = unknown> = Required<AgentGroupsRecord<Ttelemetry_mapping, Ttelemetry_schema>> & BaseSystemFields<Texpand>
 export type AgentLayoutsResponse<Ttransformation_matrix = unknown, Texpand = unknown> = Required<AgentLayoutsRecord<Ttransformation_matrix>> & BaseSystemFields<Texpand>
 export type AgentsResponse<Texpand = unknown> = Required<AgentsRecord> & BaseSystemFields<Texpand>
 export type LayoutsResponse<Tgis_bound = unknown, Texpand = unknown> = Required<LayoutsRecord<Tgis_bound>> & BaseSystemFields<Texpand>
 export type MissionsResponse<Texpand = unknown> = Required<MissionsRecord> & BaseSystemFields<Texpand>
+export type TelemetrySettingsResponse<Texpand = unknown> = Required<TelemetrySettingsRecord> & BaseSystemFields<Texpand>
 export type UsersResponse<Texpand = unknown> = Required<UsersRecord> & AuthSystemFields<Texpand>
 
 // Types containing all Records and Responses, useful for creating typing helper functions
@@ -183,11 +215,13 @@ export type CollectionRecords = {
 	_mfas: MfasRecord
 	_otps: OtpsRecord
 	_superusers: SuperusersRecord
+	agent_events: AgentEventsRecord
 	agent_groups: AgentGroupsRecord
 	agent_layouts: AgentLayoutsRecord
 	agents: AgentsRecord
 	layouts: LayoutsRecord
 	missions: MissionsRecord
+	telemetry_settings: TelemetrySettingsRecord
 	users: UsersRecord
 }
 
@@ -197,11 +231,13 @@ export type CollectionResponses = {
 	_mfas: MfasResponse
 	_otps: OtpsResponse
 	_superusers: SuperusersResponse
+	agent_events: AgentEventsResponse
 	agent_groups: AgentGroupsResponse
 	agent_layouts: AgentLayoutsResponse
 	agents: AgentsResponse
 	layouts: LayoutsResponse
 	missions: MissionsResponse
+	telemetry_settings: TelemetrySettingsResponse
 	users: UsersResponse
 }
 
