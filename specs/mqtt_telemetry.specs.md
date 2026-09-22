@@ -562,6 +562,18 @@ still streaming pose over gRPC, and no code path references the deleted RPCs.
 - Integration test: embedded broker + ephemeral Timescale; agent publishes good
   then bad telemetry; assert throttling and row landing.
 
+**Known risk, accepted:** Step 4's embedded-broker test surfaced a real, reproducible
+data race inside `github.com/eclipse/paho.mqtt.golang` v1.5.1 itself (reconnect's
+session-resume vs. the prior connection's outgoing-write goroutine — both stack
+frames are internal to the library, not this codebase). Triggered by a QoS≥1
+publish in flight around a reconnect, which `CleanSession=false` (needed so an
+agent's task subscription survives a reconnect) makes a normal occurrence. v1.5.1
+is the latest released version — no patch available. Decision: accept the risk
+rather than block on a library fork or client-library swap. The one test that
+reproduces it is excluded from `-race` runs via a `!race` build tag with a comment
+explaining why (`pkg/agentsdk/agent_integration_test.go`); revisit if this proves
+to matter in practice.
+
 ## Sequencing
 
 ```
