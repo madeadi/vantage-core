@@ -47,7 +47,11 @@ func NewAgent(id string, topicPrefix string, broker string, username string, pas
 		return nil
 	}
 
-	topic := NewTopic(topicPrefix, id)
+	topic, err := NewTopic(topicPrefix, id)
+	if err != nil {
+		slog.Error("invalid agent topic", "error", err)
+		return nil
+	}
 
 	opts := mqtt.NewClientOptions().
 		AddBroker(broker).
