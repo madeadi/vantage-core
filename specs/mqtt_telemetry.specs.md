@@ -245,7 +245,7 @@ developer copies.
 
 ### 6. Core: MQTT ingest daemon
 
-New `internal/core/telemetry/ingest`. Subscribes `<prefix>/agent/+/telemetry`
+New `cmd/core/telemetry/ingest`. Subscribes `<prefix>/agent/+/telemetry`
 and `+/telemetry-schema`, extracting `agent_id` from the topic.
 
 Critical, and independent of rate: **paho dispatches handlers on a single
@@ -262,7 +262,7 @@ rather than dropped.
 Includes a fan-out registry so Step 13's SSE endpoint can tap the live stream
 without opening a second broker connection.
 
-*Files:* `internal/core/telemetry/ingest/*.go`, wired in `cmd/core/main.go`
+*Files:* `cmd/core/telemetry/ingest/*.go`, wired in `cmd/core/main.go`
 *Done when:* ingests at a configured rate with bounded memory, reporting queue
 depth and drop count.
 
@@ -277,7 +277,7 @@ Handles the cases from **Consequences** above: agent with no group
 (recompile, invalidate the whole group, emit `contract_changed`), and the
 advisory declared-vs-contract comparison feeding Step 8.
 
-*Files:* `internal/core/telemetry/registry/*.go`, `cmd/core/pbconfig.go`
+*Files:* `cmd/core/telemetry/registry/*.go`, `cmd/core/pbconfig.go`
 *Done when:* editing a group schema in the UI changes validation behaviour with
 no restart, and compiles happen once per distinct hash.
 
@@ -302,7 +302,7 @@ type Violation struct {
 `Signature()` = stable hash of `(Kind, sorted Paths)`. This is Step 9's throttle
 key, so a robot sending the same wrong field 100×/s yields one event, not 100.
 
-*Files:* `internal/core/telemetry/validate/*.go`
+*Files:* `cmd/core/telemetry/validate/*.go`
 *Done when:* unit tests cover each `Kind`, and signatures are stable across
 repeated identical failures.
 
@@ -318,7 +318,7 @@ grow the map without limit. Count and report evictions.
 
 Config: window, per-agent signature cap, global events/sec ceiling.
 
-*Files:* `internal/core/telemetry/events/*.go`
+*Files:* `cmd/core/telemetry/events/*.go`
 *Done when:* a 10k-bad-message burst produces ≤2 rows with a correct count.
 
 ### 10. PocketBase migrations
@@ -361,7 +361,7 @@ Store **both** mapped timestamp and `received_at` — agent clocks skew and repl
 needs a fallback ordering. Reject mapped timestamps outside a sane window (±24h)
 as `bad_timestamp` rather than writing garbage into a hypertable.
 
-*Files:* `internal/core/telemetry/mapping/*.go`
+*Files:* `cmd/core/telemetry/mapping/*.go`
 *Done when:* dotted-path extraction and all three time formats are unit-tested,
 including missing-path and wrong-type cases.
 
@@ -396,7 +396,7 @@ carrying ten rows.
 New dependency: `github.com/jackc/pgx/v5`. These migrations are plain SQL with a
 small runner — PocketBase migrations only manage its SQLite.
 
-*Files:* `internal/core/telemetry/store/*.go`, `.../store/migrations/*.sql`
+*Files:* `cmd/core/telemetry/store/*.go`, `.../store/migrations/*.sql`
 *Done when:* toggling persistence off stops writes without disabling validation,
 and killing Postgres mid-run drops rows with a count rather than deadlocking
 ingest.
@@ -420,7 +420,7 @@ Following the existing ConnectRPC style (`proto/api/v1/`, `POST /api.v1.*`):
 Auth via the PocketBase token; operator reads, admin changes settings. Run
 `swag init` after handler changes.
 
-*Files:* `proto/api/v1/telemetry.proto`, `internal/core/controller/telemetry_*.go`
+*Files:* `proto/api/v1/telemetry.proto`, `cmd/core/controller/telemetry_*.go`
 *Done when:* all three are callable and `make proto` regenerates cleanly.
 
 ### 14. UI: contract health, live, replay
@@ -498,7 +498,7 @@ makes spoofing trivial, since the agent ID is otherwise just a topic segment any
 publisher can type. Re-validate the agent ID here (Step 1) before it becomes a
 credential.
 
-*Files:* `internal/core/controller/agent_registry_http.go`, `pkg/agentsdk/registration.go`
+*Files:* `cmd/core/controller/agent_registry_http.go`, `pkg/agentsdk/registration.go`
 *Done when:* an agent bootstraps from a device key to a working scoped broker
 session.
 
