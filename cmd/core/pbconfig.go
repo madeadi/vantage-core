@@ -1,14 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"log/slog"
 
 	"vantageos-core/cmd/core/config"
 	grpc2 "vantageos-core/cmd/core/grpc"
 	"vantageos-core/cmd/core/model"
 	"vantageos-core/cmd/core/service"
+	"vantageos-core/cmd/core/telemetry/registry"
 
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 // Config collection names. Each row's logical identifier is stored in a
@@ -22,6 +25,7 @@ const (
 	collAgents       = "agents"
 	collMissions     = "missions"
 	collAgentLayouts = "agent_layouts"
+	collAgentGroups  = "agent_groups"
 )
 
 // --- loaders -----------------------------------------------------------------
@@ -81,6 +85,45 @@ func loadAgentLayouts(app core.App) ([]config.AgentLayoutConfig, error) {
 	return out, nil
 }
 
+// loadAgentGroupSchemas queries agent_groups and returns group record id ->
+// telemetry_schema for every group that has one set. A group with no schema
+// (JSONField default, read back as an empty/null types.JSONRaw) is omitted
+// -- the schema registry treats a missing entry as no_contract.
+func loadAgentGroupSchemas(app core.App) (map[string]json.RawMessage, error) {
+	records, err := app.FindAllRecords(collAgentGroups)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]json.RawMessage, len(records))
+	for _, r := range records {
+		raw, ok := r.Get("telemetry_schema").(types.JSONRaw)
+		if !ok || len(raw) == 0 || string(raw) == "null" {
+			continue
+		}
+		out[r.Id] = json.RawMessage(raw)
+	}
+	return out, nil
+}
+
+// loadAgentGroupMemberships queries agents and returns agent_id -> the
+// record id of its agent_group relation. An agent with no group assigned is
+// omitted -- the schema registry treats a missing entry as no_contract.
+func loadAgentGroupMemberships(app core.App) (map[string]string, error) {
+	records, err := app.FindAllRecords(collAgents)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(records))
+	for _, r := range records {
+		groupID := r.GetString("agent_group")
+		if groupID == "" {
+			continue
+		}
+		out[r.GetString("agent_id")] = groupID
+	}
+	return out, nil
+}
+
 // --- live reload -----------------------------------------------------------
 
 // watchConfig binds PocketBase record hooks so that create/update/delete on a
@@ -90,7 +133,7 @@ func loadAgentLayouts(app core.App) ([]config.AgentLayoutConfig, error) {
 // Caveat: reg-tokens and layout matrices update immediately, but an agent or
 // mission with a live gRPC stream keeps it until it reconnects — token removal
 // only blocks new registrations.
-func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionRegistry, agentSrv grpc2.AgentServer) {
+func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionRegistry, agentSrv grpc2.AgentServer, schemaRegistry *registry.Registry) {
 	reloadAgents := func() {
 		agents, err := loadAllowedAgents(app)
 		if err != nil {
@@ -118,6 +161,34 @@ func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionReg
 		agentSrv.SetLayouts(layouts)
 		slog.Info("agent_layouts config reloaded", "count", len(layouts))
 	}
+	// The telemetry schema registry depends on both collections: agents for
+	// which group an agent belongs to, agent_groups for what that group's
+	// contract is. Either changing (an admin editing a schema, or
+	// reassigning an agent to a different group) must take effect
+	// immediately -- see specs/mqtt_telemetry.specs.md Step 7.
+	reloadAgentGroupMemberships := func() {
+		memberships, err := loadAgentGroupMemberships(app)
+		if err != nil {
+			slog.Error("reload agent_group memberships failed", "err", err)
+			return
+		}
+		schemaRegistry.SetAgentGroups(memberships)
+		slog.Info("agent_group memberships reloaded", "count", len(memberships))
+	}
+	reloadAgentGroupSchemas := func() {
+		schemas, err := loadAgentGroupSchemas(app)
+		if err != nil {
+			slog.Error("reload agent_group schemas failed", "err", err)
+			return
+		}
+		if err := schemaRegistry.SetGroupSchemas(schemas); err != nil {
+			// Not fatal: SetGroupSchemas still installs every schema that
+			// did compile, so one group's mistake doesn't take every other
+			// group's validation down with it.
+			slog.Error("one or more agent_groups schemas failed to compile", "err", err)
+		}
+		slog.Info("agent_group schemas reloaded", "count", len(schemas))
+	}
 
 	bind := func(coll string, reload func()) {
 		onChange := func(e *core.RecordEvent) error {
@@ -133,6 +204,8 @@ func watchConfig(app core.App, ar *service.AgentRegistry, mr *service.MissionReg
 	}
 
 	bind(collAgents, reloadAgents)
+	bind(collAgents, reloadAgentGroupMemberships)
 	bind(collMissions, reloadMissions)
 	bind(collAgentLayouts, reloadAgentLayouts)
+	bind(collAgentGroups, reloadAgentGroupSchemas)
 }

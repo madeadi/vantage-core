@@ -44,16 +44,30 @@ func DeriveTelemetrySchema[T any]() (TelemetrySchema, error) {
 		return TelemetrySchema{}, fmt.Errorf("agentsdk: marshal schema: %w", err)
 	}
 
+	hash, canon, err := HashSchema(raw)
+	if err != nil {
+		return TelemetrySchema{}, err
+	}
+	return TelemetrySchema{Hash: hash, Schema: canon}, nil
+}
+
+// HashSchema canonicalises raw JSON Schema (sorted-key JSON — see
+// canonicalizeJSON) and returns it alongside a stable content hash: the
+// first 16 hex characters of its sha256.
+//
+// This is exported, and used on both sides of the schema_contract_mismatch
+// comparison in specs/mqtt_telemetry.specs.md Step 8 — DeriveTelemetrySchema
+// calls it for an agent's advisory declared schema, and cmd/core's schema
+// registry calls it for the authoritative group contract. Both sides must
+// hash with the same algorithm for their hashes to be comparable at all;
+// duplicating this logic in the registry package would silently break that.
+func HashSchema(raw json.RawMessage) (hash string, canonical json.RawMessage, err error) {
 	canon, err := canonicalizeJSON(raw)
 	if err != nil {
-		return TelemetrySchema{}, fmt.Errorf("agentsdk: canonicalize schema: %w", err)
+		return "", nil, fmt.Errorf("agentsdk: canonicalize schema: %w", err)
 	}
-
 	sum := sha256.Sum256(canon)
-	return TelemetrySchema{
-		Hash:   hex.EncodeToString(sum[:])[:16],
-		Schema: canon,
-	}, nil
+	return hex.EncodeToString(sum[:])[:16], canon, nil
 }
 
 // canonicalizeJSON re-encodes raw with object keys sorted, so two

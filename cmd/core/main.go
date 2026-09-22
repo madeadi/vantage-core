@@ -18,6 +18,7 @@ import (
 	grpc2 "vantageos-core/cmd/core/grpc"
 	"vantageos-core/cmd/core/repository"
 	"vantageos-core/cmd/core/service"
+	"vantageos-core/cmd/core/telemetry/registry"
 	_ "vantageos-core/docs"
 	agentv1 "vantageos-core/proto/agent/v1"
 	"vantageos-core/proto/api/v1/apiv1connect"
@@ -74,6 +75,23 @@ func main() {
 	if err != nil {
 		slog.Error("failed to load agent_layouts from pocketbase", "err", err)
 		return
+	}
+	agentGroupSchemas, err := loadAgentGroupSchemas(pbApp)
+	if err != nil {
+		slog.Error("failed to load agent_groups from pocketbase", "err", err)
+		return
+	}
+	agentGroupMemberships, err := loadAgentGroupMemberships(pbApp)
+	if err != nil {
+		slog.Error("failed to load agent group memberships from pocketbase", "err", err)
+		return
+	}
+	schemaRegistry := registry.New()
+	schemaRegistry.SetAgentGroups(agentGroupMemberships)
+	if err := schemaRegistry.SetGroupSchemas(agentGroupSchemas); err != nil {
+		// Not fatal: SetGroupSchemas still installs every schema that did
+		// compile -- see its doc comment.
+		slog.Error("one or more agent_groups schemas failed to compile", "err", err)
 	}
 
 	grpcListenAddr := cfg.GRPCListenAddr
@@ -140,7 +158,7 @@ func main() {
 
 	// Re-dispatch config-collection edits into the registries without a restart,
 	// then start serving the PocketBase admin UI + REST API.
-	watchConfig(pbApp, ar, mr, grpcSrv)
+	watchConfig(pbApp, ar, mr, grpcSrv, schemaRegistry)
 	go servePocketBase(pbApp, cfg.PocketBase.ListenAddr)
 
 	missionGrpcSrv := grpc2.NewMissionGrpc(mr, mtm)
