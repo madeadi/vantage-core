@@ -11,3 +11,15 @@ pocketbase:
   enabled: true
   listen_addr: "127.0.0.1:8090"
   data_dir: "pb_data"
+
+# Core's own connection to the mqtt broker agents publish telemetry to (see
+# pkg/agentsdk, cmd/core/telemetry/ingest). Off by default -- disabled, core
+# runs exactly as it did before this feature existed. topic_prefix must match
+# what agents are configured to publish under.
+mqtt:
+  enabled: false
+  broker: "tcp://127.0.0.1:1883"
+  client_id: "vantageos-core"
+  username: ""
+  password: ""
+  topic_prefix: "vantageos"

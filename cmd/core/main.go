@@ -92,6 +92,14 @@ func main() {
 	defer cancelPose()
 	go poseListener.Run(poseCtx)
 
+	// MQTT telemetry ingest is additive to the existing gRPC agent path (see
+	// specs/mqtt_telemetry.specs.md) and off by default -- a core instance
+	// with mqtt.enabled: false in its config runs exactly as it did before
+	// this feature existed.
+	if cfg.MQTT.Enabled {
+		startTelemetryIngest(cfg.MQTT)
+	}
+
 	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
 	dispatcher := service.NewTaskDispatcher(ar, tRepo)
 

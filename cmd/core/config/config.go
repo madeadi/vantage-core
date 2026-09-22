@@ -15,12 +15,28 @@ type Config struct {
 	GRPCListenAddr    string           `yaml:"grpc_listen_addr"`
 	GRPCAdvertiseAddr string           `yaml:"grpc_advertise_addr"`
 	PocketBase        PocketBaseConfig `yaml:"pocketbase"`
+	MQTT              MQTTConfig       `yaml:"mqtt"`
 }
 
 type PocketBaseConfig struct {
 	Enabled    bool   `yaml:"enabled"`
 	ListenAddr string `yaml:"listen_addr"`
 	DataDir    string `yaml:"data_dir"`
+}
+
+// MQTTConfig is core's own connection to the broker agents publish to — the
+// credentials for the telemetry ingest daemon (see cmd/core/telemetry/ingest),
+// not an agent's. Off by default: MQTT telemetry is additive to the existing
+// gRPC agent path (see specs/mqtt_telemetry.specs.md Phase A), so a core
+// instance with no broker configured keeps running exactly as it did before
+// this feature existed.
+type MQTTConfig struct {
+	Enabled     bool   `yaml:"enabled"`
+	Broker      string `yaml:"broker"`    // e.g. "tcp://127.0.0.1:1883"
+	ClientID    string `yaml:"client_id"` // core's own mqtt client id
+	Username    string `yaml:"username"`
+	Password    string `yaml:"password"`
+	TopicPrefix string `yaml:"topic_prefix"` // must match the prefix agents publish under
 }
 
 // AgentConfig is one row of the "agents" PocketBase collection.
