@@ -1,9 +1,9 @@
-# MQTT Telemetry + gRPC Decommission
+# MQTT Telemetry Pipeline
 
 Expand `pkg/agentsdk` so an agent developer declares a telemetry shape once, has
 it continuously validated by Vantage against a fleet-level contract, persisted
-for replay, and inspected in the UI — then retire the gRPC agent transport in
-favour of MQTT.
+for replay, and inspected in the UI — then move agent telemetry and task
+dispatch off gRPC onto MQTT.
 
 ## Goal
 
@@ -23,6 +23,29 @@ they think they are sending — live, and historically with replay.
   listener are removed once all five RPCs have MQTT/REST equivalents.
 - **Agent-id-first topic layout.** The agent ID is one segment, high in the
   hierarchy, so broker ACL patterns can substitute it. See below.
+- **Broker is Mosquitto.** The `%u` pattern ACLs below are Mosquitto syntax and
+  can be taken literally.
+- **Pose is out of scope.** It gets its own topic and its own validation model in
+  a later spec. `ReportPoseTelemetry` stays on gRPC for now.
+- **`MissionService` is out of scope.** It keeps its gRPC transport, which means
+  `:9090` survives this work — see Phase B.
+
+## Scale target
+
+**10 agents at 1 Hz** — 10 msg/s, ~864k rows/day, ~315M/year if nothing is ever
+pruned. This is small, and the spec should be honest about that rather than
+build for a fleet that does not exist yet. It justifies *not* building:
+
+- No `COPY`-based bulk insert — a batched multi-row `INSERT` is ample at 10/s.
+- No worker pool — one consumer goroutine drains the ingest queue.
+- No continuous aggregates — `time_bucket` at query time covers replay
+  downsampling until rates are an order of magnitude higher.
+- No space partitioning, no separate high-rate lanes.
+
+TimescaleDB still earns its place for the hypertable, native compression and a
+declarative retention policy, all of which are near-free to adopt now and
+awkward to retrofit. Everything above is a one-line change if the fleet grows;
+none of it is worth carrying today.
 
 **Consequences of "group schema wins" — these shape Phase A:**
 
@@ -56,17 +79,21 @@ streams, an agent whose ID was literally `schema` collided, and the agent ID sat
 at varying depths — which meant broker ACL patterns could not substitute it.
 Replaced by:
 
-| Topic | Publisher | Retain | QoS |
-|---|---|---|---|
-| `<prefix>/agent/<id>/telemetry` | agent | no | 0 |
-| `<prefix>/agent/<id>/telemetry-schema` | agent | **yes** | 1 |
-| `<prefix>/agent/<id>/pose` | agent | no | 0 |
-| `<prefix>/agent/<id>/event` | agent (+ broker LWT) | **yes** | 1 |
-| `<prefix>/agent/<id>/task/new` | **core** | no | 1 |
-| `<prefix>/agent/<id>/task/<taskID>/status` | agent | no | 1 |
+| Topic | Publisher | Retain | QoS | Scope |
+|---|---|---|---|---|
+| `<prefix>/agent/<id>/telemetry` | agent | no | 0 | Phase A |
+| `<prefix>/agent/<id>/telemetry-schema` | agent | **yes** | 1 | Phase A |
+| `<prefix>/agent/<id>/event` | agent (+ broker LWT) | **yes** | 1 | Phase A |
+| `<prefix>/agent/<id>/task/new` | **core** | no | 1 | Phase B |
+| `<prefix>/agent/<id>/task/<taskID>/status` | agent | no | 1 | Phase B |
+| `<prefix>/agent/<id>/pose` | agent | no | 0 | **reserved** |
 
-Core subscribes `<prefix>/agent/+/telemetry`, `+/telemetry-schema`, `+/pose`,
-`+/event`, and `<prefix>/agent/+/task/+/status`.
+`pose` is reserved, not built — pose keeps its gRPC transport and gets its own
+validation model in a later spec. The name is claimed here so that spec inherits
+this layout instead of reopening it.
+
+Core subscribes `<prefix>/agent/+/telemetry`, `+/telemetry-schema`, `+/event`,
+and (Phase B) `<prefix>/agent/+/task/+/status`.
 
 This is a breaking change taken now, while there are zero deployed publishers.
 No compatibility shim, no dual-topic period — Step 1 changes the builders and
@@ -219,13 +246,18 @@ developer copies.
 ### 6. Core: MQTT ingest daemon
 
 New `internal/core/telemetry/ingest`. Subscribes `<prefix>/agent/+/telemetry`
-(and `+/telemetry-schema`, `+/pose`), extracting `agent_id` from the topic.
+and `+/telemetry-schema`, extracting `agent_id` from the topic.
 
-Critical: **paho dispatches handlers on a single goroutine by default.** Work
-done in the callback stalls every other message. The callback must do nothing but
-non-blocking enqueue onto a buffered channel drained by a worker pool. On full
-buffer, drop and count (raising `telemetry_dropped` via Step 9's throttle) —
-never block the broker connection.
+Critical, and independent of rate: **paho dispatches handlers on a single
+goroutine by default.** Work done in the callback stalls every other message —
+including the `event` topic that presence depends on. The callback must do
+nothing but non-blocking enqueue onto a buffered channel. On full buffer, drop
+and count (raising `telemetry_dropped` via Step 9's throttle) — never block the
+broker connection.
+
+One consumer goroutine drains the queue; at 10 msg/s a pool buys nothing. Size
+the buffer for ~100s of headroom (1024 entries) so a brief DB stall is absorbed
+rather than dropped.
 
 Includes a fan-out registry so Step 13's SSE endpoint can tap the live stream
 without opening a second broker connection.
@@ -352,24 +384,32 @@ SELECT create_hypertable('telemetry', 'time');
 CREATE INDEX ON telemetry (agent_id, time DESC);
 ```
 
-Batch writer: flush on `batch_size` or `flush_interval`, whichever first;
-`COPY`-based insert; retry with backoff; bounded queue that drops (counted)
-rather than growing. Compression + configurable retention policy; a continuous
-aggregate for downsampled replay over long ranges.
+Batch writer: multi-row `INSERT`, flushed on `batch_size` (100) or
+`flush_interval` (1s), whichever comes first; retry with backoff; bounded queue
+that drops (counted) rather than growing. Add Timescale's native compression and
+a declarative retention policy — both cheap now, awkward to retrofit.
+
+Per the scale target: no `COPY`, no continuous aggregates, no space
+partitioning. At 10 msg/s a batched `INSERT` every second is one statement
+carrying ten rows.
 
 New dependency: `github.com/jackc/pgx/v5`. These migrations are plain SQL with a
 small runner — PocketBase migrations only manage its SQLite.
 
 *Files:* `internal/core/telemetry/store/*.go`, `.../store/migrations/*.sql`
-*Done when:* toggling persistence off stops writes without disabling validation;
-a sustained-write benchmark shows stable memory.
+*Done when:* toggling persistence off stops writes without disabling validation,
+and killing Postgres mid-run drops rows with a count rather than deadlocking
+ingest.
 
 ### 13. Core API: query, status, live
 
 Following the existing ConnectRPC style (`proto/api/v1/`, `POST /api.v1.*`):
 
 - `TelemetryService/QueryTelemetry` — `agent_id`, `from`, `to`, `limit`, optional
-  `bucket` for downsampling. Cursor-paginated, hard row ceiling.
+  `bucket` for downsampling via `time_bucket` at query time. Cursor-paginated,
+  hard row ceiling. At 1 Hz an hour is 3600 points (send raw) and a day is 86k
+  (bucket it), so the ceiling is what keeps a wide range from becoming a
+  browser-killing response.
 - `TelemetryService/GetTelemetryStatus` — group contract, `schema_hash`,
   last-seen, valid/invalid counts over a window, recent violations. This is what
   answers "am I sending correct data".
@@ -398,8 +438,15 @@ entries (`/video-stream`, `/remote-control`) that have **no matching route** in
   (~500 rows), each row marked valid/invalid, pause/resume.
 - **Replay** (`/telemetry/:agentId/replay`) — agent picker + time range, then
   play / pause / scrub / speed (1×, 5×, 30×). Replay drives the *same* renderer
-  as live so the two cannot drift. When the mapping projects `x`/`y`, plot the
-  track on the existing `PixelMap` / `LayoutMap` components.
+  as live so the two cannot drift. Ordering is by `received_at`, displayed time
+  is the mapped `time` — a skewed agent clock must not make the scrub bar jump
+  backwards.
+
+  Replay renders **telemetry only**. An earlier draft also plotted a map track,
+  which quietly assumed the pose stream; with pose out of scope, the map is
+  drawn only when the group's mapping projects `x`/`y` into `fields`, using the
+  existing `PixelMap` / `LayoutMap` components. If it does not, replay is table
+  and chart. Nothing here reads the pose topic.
 
 Keep `app-sidebar.tsx` and `App.tsx` routes in sync (`ui/CLAUDE.md` calls this out).
 
@@ -410,30 +457,40 @@ the payload, sees a violation with the failing path, then replays the window.
 
 ---
 
-# Phase B — Decommission gRPC
+# Phase B — Move agent telemetry and tasks off gRPC
 
-`AgentService` has **five** RPCs, not just telemetry. Each needs a home before
-`:9090` can go. Two are unary request/response, which MQTT models badly — those
-belong on REST/Connect, not on a correlation-ID topic pair.
+**`:9090` survives this work.** An earlier draft titled this phase "decommission
+gRPC" and ended by deleting the listener. That is not achievable under the
+agreed scope, for two independent reasons:
 
-| RPC | Replacement |
+1. `proto/mission/v1` `MissionService.StreamMission` is a **second** gRPC service
+   on the same listener, consumed by `cmd/sps_mission`. Out of scope.
+2. `ReportPoseTelemetry` is an `AgentService` RPC, and pose is out of scope — so
+   even `AgentService` itself cannot be deleted.
+
+So Phase B moves the two surfaces this spec actually covers, and leaves the rest
+of the gRPC server standing. `AgentService` ends up partially migrated, which is
+worth stating plainly rather than discovering later.
+
+| RPC | Disposition |
 |---|---|
-| `ReportTelemetry` | MQTT `<id>/telemetry` — Phase A |
-| `ReportPoseTelemetry` | MQTT `<id>/pose` — Step 17 |
-| `StreamTasks` | MQTT `<id>/task/new` + `<id>/task/<taskID>/status` — Step 16 |
-| `GetTransformationMatrices` | REST/Connect — Step 18 |
-| `ReportSkills` | REST/Connect — Step 18 |
+| `ReportTelemetry` | → MQTT `<id>/telemetry` (Phase A), then removed |
+| `StreamTasks` | → MQTT `<id>/task/new` + `<id>/task/<taskID>/status` (Step 16) |
+| `ReportPoseTelemetry` | **stays on gRPC** — out of scope |
+| `GetTransformationMatrices` | **stays on gRPC** — fetched by the pose pipeline |
+| `ReportSkills` | **stays on gRPC** — no reason to move it alone |
 
-**Risk:** `cmd/sps-mr` and `cmd/sps_mission` are working agents driving physical
-robots, and `StreamTasks` is the control path — a dropped task means a robot does
-not move. Recommend a short dual-run for the task path only (Step 16), deleted in
-Step 18. Telemetry and pose are read-only and can cut over directly.
+**Risk:** `cmd/sps-mr` is a working agent driving physical robots, and
+`StreamTasks` is the control path — a dropped task means a robot does not move.
+Recommend a short dual-run for the task path only (Step 16), deleted in Step 17.
+Telemetry is read-only and can cut over directly.
 
 ### 15. Registration → broker credentials
 
-`POST /agents/register` currently returns `{token, grpc_url}`. Replace with
-`{broker_url, username, password, topic_prefix, agent_id}`, keeping the existing
-`agents.key` device-key model as the bootstrap secret.
+`POST /agents/register` currently returns `{token, grpc_url}`. **Extend** rather
+than replace: add `{broker_url, username, password, topic_prefix}` while keeping
+`token` and `grpc_url`, since pose and missions still need the gRPC transport
+(Step 17). The existing `agents.key` device key stays the bootstrap secret.
 
 Issue **per-agent broker credentials with the username set to the agent ID** —
 that is what makes the `%u` ACL patterns above resolve. A shared broker account
@@ -469,33 +526,24 @@ porting it.
 *Done when:* a task survives an agent restart mid-dispatch, and duplicate
 delivery executes once.
 
-### 17. Pose telemetry over MQTT
+### 17. Remove the migrated RPCs
 
-Port `ReportPoseTelemetry` to `<prefix>/agent/<id>/pose`, feeding the existing
-`PoseListener`. Higher rate than telemetry, so it gets its own topic and its own
-ingest lane — pose volume must not evict telemetry from the shared queue. The
-Monitoring UI's layout plotting must keep working throughout.
+Delete only what has a working MQTT replacement: the `ReportTelemetry` and
+`StreamTasks` RPCs from `proto/agent/v1`, their handlers in `cmd/core/grpc/`,
+`pkg/agentsdk/service/stream_task.go` and `telemetry_service.go`, and the
+Step 16 dual-run path.
 
-*Files:* `pkg/agentsdk/service/stream_pose.go` → `pkg/agentsdk/pose.go`,
-`cmd/core/service/pose_listener.go`
-*Done when:* poses render on `Monitoring` from the MQTT path with gRPC disabled.
+Keep: the `:9090` listener, `grpc_listen_addr` / `grpc_advertise_addr`,
+`MissionService` entirely, and the three `AgentService` RPCs above. Registration
+returns both broker credentials **and** `grpc_url` — agents need both transports
+until pose and missions move.
 
-### 18. Delete gRPC
-
-Move the two unary RPCs to REST/Connect first: `GetTransformationMatrices` is a
-startup config fetch (`stream_pose.go` calls it once before streaming), so it fits
-the PocketBase REST API or a Connect endpoint naturally; `ReportSkills` becomes a
-Connect call at registration.
-
-Then delete: `proto/agent/v1`, `cmd/core/grpc/`, `pkg/agentsdk/server/`,
-`pkg/agentsdk/service/stream_*.go` and `telemetry_service.go`, the `:9090`
-listener, `grpc_listen_addr` / `grpc_advertise_addr` from config, the Step 16
-dual-run path, and the now-unused gRPC deps from `go.mod`. Update root
-`CLAUDE.md` and `README.md` (already stale — it documents `cmd/smallbot` and
+Update root `CLAUDE.md` (which currently describes gRPC as the only agent
+transport) and `README.md` (already stale — it documents `cmd/smallbot` and
 `cmd/mission-sps`, neither of which exists).
 
-*Done when:* `cmd/sps-mr` and `cmd/sps_mission` run with no gRPC, and
-`grep -r grpc` is clean outside vendor.
+*Done when:* `cmd/sps-mr` reports telemetry and receives tasks over MQTT while
+still streaming pose over gRPC, and no code path references the deleted RPCs.
 
 ---
 
@@ -508,6 +556,9 @@ dual-run path, and the now-unused gRPC deps from `go.mod`. Update root
   six-pattern ACL file above so the read/write split is exercised in dev rather
   than discovered in production. Include a test asserting an agent *cannot*
   publish to its own `task/new`.
+- Retention default: **90 days** raw (~78M rows at the scale target, trivial for
+  Timescale). A config knob, not a decision to agonise over — it is one policy
+  statement to change, and compression makes the older end cheap.
 - Integration test: embedded broker + ephemeral Timescale; agent publishes good
   then bad telemetry; assert throttling and row landing.
 
@@ -522,20 +573,25 @@ Phase A   1 → 2 → 3 → 4 → 5        SDK track (blocks 6-9)
                   ↓
           13 → 14                  API + UI
 
-Phase B   15 → 16 → 17 → 18        after Phase A proves MQTT under load
+Phase B   15 → 16 → 17             after Phase A proves MQTT in practice
 ```
 
 Steps 10 and 11 are independent of the SDK track and can start immediately.
 Steps 6–9 and 11–12 parallelise once 1–2 fix the topic and schema contracts.
-Phase B should not start until Phase A has run telemetry over MQTT at production
-rate — that is the evidence that moving the control path is safe.
+Phase B should not start until Phase A has run telemetry over MQTT against real
+agents — that is the evidence that moving the control path is safe.
 
 ## Open questions
 
-1. Retention: how long does raw telemetry live before the continuous aggregate
-   takes over? Drives disk sizing.
-2. Multi-tenant: is `topic_prefix` per-deployment or per-customer? Determines
+None blocking. Two deferred, both safe to answer later:
+
+1. Multi-tenant: is `topic_prefix` per-deployment or per-customer? Determines
    whether `agent_id` must be globally unique — and, now that the agent ID is
-   the broker username, whether credentials are unique across tenants too.
-3. Does the UI need to *author* group schemas beyond a JSON textarea (Step 2's
-   CLI covers the derive-from-Go path, but not a hand-written contract)?
+   the broker username, whether credentials must be unique across tenants too.
+   Answerable before Step 15 without disturbing anything earlier.
+2. Does the UI need to *author* group schemas beyond a JSON textarea? Step 2's
+   CLI covers the derive-from-Go path; a hand-written contract is a Step 14
+   nicety. Agent developers hold `admin`, so permissions are not the obstacle.
+
+Retention is settled at a 90-day default (see Ops) rather than left open —
+it is a config knob, and treating it as a blocking decision was overthinking.
