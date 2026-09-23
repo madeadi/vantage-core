@@ -40,8 +40,8 @@ function App() {
         <Route path="telemetry">
           <Route index element={<TelemetryIndexPage />} />
           <Route path=":agentId" element={<TelemetryLayout />}>
-            <Route index element={<ContractHealthPage />} />
-            <Route path="live" element={<TelemetryLivePage />} />
+            <Route index element={<TelemetryLivePage />} />
+            <Route path="contract" element={<ContractHealthPage />} />
             <Route path="replay" element={<TelemetryReplayPage />} />
           </Route>
         </Route>

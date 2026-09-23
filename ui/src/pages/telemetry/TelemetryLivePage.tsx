@@ -8,8 +8,8 @@ import { TelemetryTable } from './TelemetryTable'
 
 const CAPACITY = 500
 
-/** /telemetry/:agentId/live: an SSE subscription with a rolling capped
- * buffer, each row marked valid/invalid, pause/resume (spec Step 14). */
+/** /telemetry/:agentId (the default tab): an SSE subscription with a rolling
+ * capped buffer, each row marked valid/invalid, pause/resume (spec Step 14). */
 export function TelemetryLivePage() {
   const { agentId = '' } = useParams<{ agentId: string }>()
   const { rows, connected, error, paused, setPaused, clear } = useTelemetryLive(

@@ -3,13 +3,14 @@ import { cn } from 'cn'
 import { useAgents } from '@/hooks/use-agents'
 
 const tabs = [
-  { to: '', label: 'Contract & health', end: true },
-  { to: 'live', label: 'Live', end: false },
+  { to: '', label: 'Live', end: true },
+  { to: 'contract', label: 'Contract & health', end: false },
   { to: 'replay', label: 'Replay', end: false },
 ]
 
-/** Shared shell for /telemetry/:agentId, .../live and .../replay: an agent
- * switcher plus tab nav, matching the spec's nested-route layout (Step 14). */
+/** Shared shell for /telemetry/:agentId (live, the default), .../contract and
+ * .../replay: an agent switcher plus tab nav, matching the spec's
+ * nested-route layout (Step 14). */
 export function TelemetryLayout() {
   const { agentId = '' } = useParams<{ agentId: string }>()
   const { agents } = useAgents()

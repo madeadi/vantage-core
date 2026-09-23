@@ -15,10 +15,17 @@ import {
 } from '@/components/ui/alert-dialog'
 import { cn } from 'cn'
 import { useAgents } from '@/hooks/use-agents'
-import type { Agent } from '@/lib/agents'
+import { type Agent, setAgentGroup } from '@/lib/agents'
 import { useAgentGroups } from '@/hooks/use-agent-groups'
 import { type AgentGroup, deleteAgentGroup } from '@/lib/agent-groups'
 import { AgentGroupSheet } from '@/components/agent-group-sheet'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useLayouts } from '@/hooks/use-layouts'
 import { type Layout, deleteLayout } from '@/lib/layouts'
 import { LayoutSheet } from '@/components/layout-sheet'
@@ -54,19 +61,61 @@ export function RemoteControlPage() {
   return <Page title="Remote Control" />
 }
 
-function AgentRow({ agent }: { agent: Agent }) {
+const NO_GROUP = '__none__'
+
+function AgentRow({
+  agent,
+  groups,
+  onGroupChange,
+}: {
+  agent: Agent
+  groups: AgentGroup[]
+  onGroupChange: (agent: Agent, groupId: string) => void
+}) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-col gap-1">
         <span className="font-medium">{agent.name}</span>
         <span className="text-muted-foreground font-mono text-xs">{agent.id}</span>
       </div>
+      <Select
+        value={agent.groupId || NO_GROUP}
+        onValueChange={(value) =>
+          onGroupChange(agent, value === NO_GROUP ? '' : value)
+        }
+      >
+        <SelectTrigger size="sm" className="w-48">
+          <SelectValue placeholder="No group" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_GROUP}>No group</SelectItem>
+          {groups.map((group) => (
+            <SelectItem key={group.id} value={group.id}>
+              {group.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   )
 }
 
 export function SettingsAgentsPage() {
   const { agents, loading, error, refetch } = useAgents()
+  const { groups } = useAgentGroups()
+  const [groupError, setGroupError] = useState<string | null>(null)
+
+  async function handleGroupChange(agent: Agent, groupId: string) {
+    setGroupError(null)
+    try {
+      await setAgentGroup(agent.recordId, groupId)
+      refetch()
+    } catch (err) {
+      setGroupError(
+        err instanceof Error ? err.message : `Failed to update ${agent.name}'s group`,
+      )
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -93,7 +142,16 @@ export function SettingsAgentsPage() {
           <AlertTitle>Could not load agents</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-      ) : loading ? (
+      ) : null}
+
+      {groupError ? (
+        <Alert variant="destructive">
+          <AlertTitle>Could not update agent group</AlertTitle>
+          <AlertDescription>{groupError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {loading ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-[74px] w-full" />
           <Skeleton className="h-[74px] w-full" />
@@ -104,7 +162,12 @@ export function SettingsAgentsPage() {
       ) : (
         <div className="flex flex-col gap-2">
           {agents.map((agent) => (
-            <AgentRow key={agent.id} agent={agent} />
+            <AgentRow
+              key={agent.id}
+              agent={agent}
+              groups={groups}
+              onGroupChange={handleGroupChange}
+            />
           ))}
         </div>
       )}

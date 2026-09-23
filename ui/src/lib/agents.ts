@@ -9,12 +9,15 @@ export interface Agent {
   /** Stable agent identifier used by the control plane. */
   id: string
   name: string
+  /** PocketBase record id of the assigned agent_groups record, if any. */
+  groupId: string
 }
 
 interface AgentRecord {
   id: string
   agent_id: string
   name: string
+  agent_group?: string
 }
 
 export async function listAgents(signal?: AbortSignal): Promise<Agent[]> {
@@ -27,5 +30,11 @@ export async function listAgents(signal?: AbortSignal): Promise<Agent[]> {
     recordId: r.id,
     id: r.agent_id,
     name: r.name || r.agent_id,
+    groupId: r.agent_group ?? '',
   }))
+}
+
+/** Assigns (or, with groupId '', clears) an agent's agent_groups relation. */
+export async function setAgentGroup(recordId: string, groupId: string): Promise<void> {
+  await pb.collection('agents').update(recordId, { agent_group: groupId })
 }

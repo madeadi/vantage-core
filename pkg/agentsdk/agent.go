@@ -35,7 +35,7 @@ type Agent struct {
 	connectedOnce  bool       `json:"-"` // guards the one-time registered event + task listener setup
 	onConnectFuncs []func()   `json:"-"`
 
-	TaskManager *TaskManager
+	TaskManager *TaskManager `json:"-"`
 }
 
 // NewAgent builds an Agent for id, using CleanSession=false so the broker

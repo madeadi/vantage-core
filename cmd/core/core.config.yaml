@@ -18,8 +18,8 @@ pocketbase:
 # runs exactly as it did before this feature existed. topic_prefix must match
 # what agents are configured to publish under.
 mqtt:
-  enabled: false
-  broker: "tcp://127.0.0.1:1883"
+  enabled: true
+  broker: "mqtt://mqtt.rm.taksu.tech:1884"
   client_id: "vantageos-core"
   username: ""
   password: ""
