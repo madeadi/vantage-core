@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package api.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "vantageos-core/proto/api/v1;apiv1";
+
+// TelemetryService answers "am I sending correct data" and serves recorded
+// telemetry for replay. See specs/mqtt_telemetry.specs.md Step 13. Live
+// telemetry is served separately over SSE (GET /telemetry/live?agent_id=),
+// not through this ConnectRPC service -- see that step's doc comment for why.
+service TelemetryService {
+    rpc QueryTelemetry     (QueryTelemetryRequest)     returns (QueryTelemetryResponse);
+    rpc GetTelemetryStatus (GetTelemetryStatusRequest) returns (GetTelemetryStatusResponse);
+}
+
+// ── Messages ───────────────────────────────────────────────────────────────
+
+message TelemetryPoint {
+    string                    agent_id    = 1;
+    google.protobuf.Timestamp time        = 2; // the mapped/event timestamp
+    google.protobuf.Timestamp received_at = 3; // broker receive time -- always present, a fallback ordering
+    string                    group_id    = 4; // empty if the agent had no group at ingest time
+    string                    schema_hash = 5; // empty if there was no contract to validate against
+    // valid is unset (nil) when there was no contract to validate against --
+    // the no_contract case, see cmd/core/telemetry/store.Row.Valid.
+    google.protobuf.BoolValue valid   = 6;
+    google.protobuf.Struct    fields  = 7; // the mapped projection, if any
+    google.protobuf.Struct    payload = 8; // the full raw payload
+}
+
+// ── QueryTelemetry ─────────────────────────────────────────────────────────
+
+message QueryTelemetryRequest {
+    string                     agent_id = 1;
+    google.protobuf.Timestamp  from     = 2;
+    google.protobuf.Timestamp  to       = 3;
+
+    // limit caps returned points; server-enforced hard ceiling applies
+    // regardless (see cmd/core/controller/telemetry_connect.go).
+    int32 limit = 4;
+
+    // bucket, e.g. "1m", "5m", "1h", downsamples via time_bucket at query
+    // time instead of returning raw points -- see specs/mqtt_telemetry.specs.md
+    // Step 13's reasoning: a day at 1Hz is 86k raw points, too many for a
+    // browser chart to render usefully, let alone transfer cheaply.
+    string bucket = 5;
+
+    string page_token = 6;
+}
+
+message QueryTelemetryResponse {
+    repeated TelemetryPoint points          = 1;
+    string                  next_page_token = 2;
+}
+
+// ── GetTelemetryStatus ─────────────────────────────────────────────────────
+
+message GetTelemetryStatusRequest {
+    string agent_id = 1;
+    // window bounds the valid/invalid counts and recent violations below,
+    // e.g. "1h", "24h". Defaults to 1h when empty.
+    string window = 2;
+}
+
+message TelemetryViolationSummary {
+    string                     kind      = 1; // validate.Kind, e.g. "missing_required"
+    string                     detail    = 2;
+    int32                      count     = 3;
+    google.protobuf.Timestamp  last_seen = 4;
+}
+
+message GetTelemetryStatusResponse {
+    string agent_id    = 1;
+    string group_id    = 2;
+    string schema_hash = 3; // the group's current authoritative contract hash
+
+    google.protobuf.Timestamp last_seen = 4; // zero/unset if never seen
+
+    int32 valid_count   = 5; // over `window`
+    int32 invalid_count = 6; // over `window`
+
+    repeated TelemetryViolationSummary recent_violations = 7;
+}

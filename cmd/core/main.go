@@ -18,7 +18,9 @@ import (
 	grpc2 "vantageos-core/cmd/core/grpc"
 	"vantageos-core/cmd/core/repository"
 	"vantageos-core/cmd/core/service"
+	"vantageos-core/cmd/core/telemetry/live"
 	"vantageos-core/cmd/core/telemetry/persistcfg"
+	"vantageos-core/cmd/core/telemetry/query"
 	"vantageos-core/cmd/core/telemetry/registry"
 	"vantageos-core/cmd/core/telemetry/store"
 	_ "vantageos-core/docs"
@@ -26,6 +28,7 @@ import (
 	"vantageos-core/proto/api/v1/apiv1connect"
 	missionv1 "vantageos-core/proto/mission/v1"
 
+	"connectrpc.com/connect"
 	"github.com/jackc/pgx/v5/pgxpool"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"google.golang.org/grpc"
@@ -103,6 +106,11 @@ func main() {
 	// store that will never read them.
 	var persistRegistry *persistcfg.Registry
 	var persistStore *store.Store
+	// telemetryQuerier stays nil under the same condition as persistRegistry
+	// -- TelemetryConnectHandler treats a nil querier as "persistence off"
+	// and degrades QueryTelemetry/status counts accordingly rather than
+	// panicking (see that handler's doc comment).
+	var telemetryQuerier *query.Querier
 	if cfg.Telemetry.PersistenceEnabled {
 		persistRegistry = persistcfg.New()
 		agentGroupMappings, err := loadAgentGroupMappings(pbApp)
@@ -140,8 +148,14 @@ func main() {
 			FlushInterval: cfg.Telemetry.FlushInterval,
 		})
 		go persistStore.Run(context.Background())
+		telemetryQuerier = query.New(pgPool)
 		slog.Info("telemetry persistence enabled", "batch_size", cfg.Telemetry.BatchSize, "flush_interval", cfg.Telemetry.FlushInterval)
 	}
+
+	// liveBroadcaster (Step 13) is always constructed, even with MQTT
+	// disabled -- the SSE endpoint and ConnectRPC handler exist regardless,
+	// they just never receive anything to publish until ingest is running.
+	liveBroadcaster := live.New()
 
 	grpcListenAddr := cfg.GRPCListenAddr
 	if grpcListenAddr == "" {
@@ -164,7 +178,7 @@ func main() {
 	// with mqtt.enabled: false in its config runs exactly as it did before
 	// this feature existed.
 	if cfg.MQTT.Enabled {
-		startTelemetryIngest(cfg.MQTT, cfg.Telemetry, pbApp, schemaRegistry, persistRegistry, persistStore)
+		startTelemetryIngest(cfg.MQTT, cfg.Telemetry, pbApp, schemaRegistry, persistRegistry, persistStore, liveBroadcaster)
 	}
 
 	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
@@ -179,14 +193,21 @@ func main() {
 	taskPath, taskHandler := apiv1connect.NewTaskServiceHandler(controller2.NewTaskConnectHandler(dispatcher))
 	agentPath, agentHandler := apiv1connect.NewAgentServiceHandler(controller2.NewAgentConnectHandler(ar))
 	missionPath, missionHandler := apiv1connect.NewMissionServiceHandler(controller2.NewMissionConnectHandler(mr))
+	telemetryPath, telemetryHandler := apiv1connect.NewTelemetryServiceHandler(
+		controller2.NewTelemetryConnectHandler(pbApp, schemaRegistry, telemetryQuerier),
+		connect.WithInterceptors(controller2.RequireOperatorInterceptor(pbApp)),
+	)
+	telemetryLive := controller2.NewTelemetryLiveController(pbApp, liveBroadcaster)
 
 	mux := http.NewServeMux()
 	ac.RegisterRoutes(mux)
 	ui.RegisterUIRoutes(mux)
 	mc.RegisterRoutes(mux)
+	telemetryLive.RegisterRoutes(mux)
 	mux.Handle(taskPath, taskHandler)
 	mux.Handle(agentPath, agentHandler)
 	mux.Handle(missionPath, missionHandler)
+	mux.Handle(telemetryPath, telemetryHandler)
 	mux.HandleFunc("/swagger/", httpSwagger.WrapHandler)
 
 	// gRPC server

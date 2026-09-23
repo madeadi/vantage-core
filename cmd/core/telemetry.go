@@ -9,6 +9,7 @@ import (
 	"vantageos-core/cmd/core/config"
 	"vantageos-core/cmd/core/telemetry/events"
 	"vantageos-core/cmd/core/telemetry/ingest"
+	"vantageos-core/cmd/core/telemetry/live"
 	"vantageos-core/cmd/core/telemetry/mapping"
 	"vantageos-core/cmd/core/telemetry/persistcfg"
 	"vantageos-core/cmd/core/telemetry/registry"
@@ -36,6 +37,11 @@ const ingestQueueSize = 1024
 // Step 12's "Done when": toggling persistence off stops writes without
 // disabling validation.
 //
+// liveBroadcaster (Step 13), when non-nil, is published to for every
+// KindTelemetry message regardless of validity or group membership -- the
+// live view exists precisely so an agent developer with no group/contract
+// configured yet can still see what they're sending.
+//
 // Connection failures are logged, not fatal: MQTT telemetry is additive to
 // the existing gRPC agent path, so a broker that's down or misconfigured
 // must not take the rest of core down with it. SetAutoReconnect and
@@ -43,7 +49,7 @@ const ingestQueueSize = 1024
 // the first failure, and OnConnect re-subscribes on every connect (including
 // a reconnect), which is a harmless no-op if the subscription is already
 // live server-side.
-func startTelemetryIngest(cfg config.MQTTConfig, telemetryCfg config.TelemetryConfig, app core.App, schemaRegistry *registry.Registry, persistRegistry *persistcfg.Registry, persistStore *store.Store) *ingest.Daemon {
+func startTelemetryIngest(cfg config.MQTTConfig, telemetryCfg config.TelemetryConfig, app core.App, schemaRegistry *registry.Registry, persistRegistry *persistcfg.Registry, persistStore *store.Store, liveBroadcaster *live.Broadcaster) *ingest.Daemon {
 	daemon := ingest.New(cfg.TopicPrefix, ingestQueueSize)
 
 	validator := validate.New(schemaRegistry)
@@ -56,6 +62,9 @@ func startTelemetryIngest(cfg config.MQTTConfig, telemetryCfg config.TelemetryCo
 			violation = validator.Validate(m.AgentID, m.Payload)
 			if persistStore != nil {
 				enqueueTelemetryRow(persistStore, persistRegistry, schemaRegistry, throttler, m, violation)
+			}
+			if liveBroadcaster != nil {
+				liveBroadcaster.Publish(m.AgentID, m.Payload)
 			}
 		case ingest.KindTelemetrySchema:
 			violation = validator.CheckSchemaAnnouncement(m.AgentID, m.Payload)

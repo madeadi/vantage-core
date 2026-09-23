@@ -26,4 +26,5 @@ proto:
 	       -I . \
 	       proto/api/v1/task.proto \
 	       proto/api/v1/agent.proto \
-	       proto/api/v1/mission.proto
+	       proto/api/v1/mission.proto \
+	       proto/api/v1/telemetry.proto
