@@ -64,7 +64,7 @@ func NewAgent(id string, topicPrefix string, broker string, username string, pas
 	a := &Agent{
 		ID:          id,
 		Topic:       topic,
-		TaskManager: NewTaskManager(context.Background(), topic.NewTask()),
+		TaskManager: NewTaskManager(context.Background(), topic),
 	}
 
 	opts := mqtt.NewClientOptions().
@@ -76,7 +76,32 @@ func NewAgent(id string, topicPrefix string, broker string, username string, pas
 		SetConnectRetry(true).
 		SetConnectTimeout(10*time.Second).
 		SetCleanSession(false).
-		SetBinaryWill(topic.Event(), willPayload, 1, true)
+		SetBinaryWill(topic.Event(), willPayload, 1, true).
+		// Paho's default behavior acks a QoS-1 message as soon as the
+		// registered handler function *returns* -- not when work it kicks
+		// off in a goroutine finishes. TaskManager.listenNewTask spawns
+		// Execute in a goroutine specifically so a long-running task
+		// doesn't block delivery of anything else, which means with
+		// auto-ack the broker would consider a task/new message delivered
+		// before the agent has actually finished it -- losing the "a task
+		// survives an agent restart mid-dispatch" guarantee (spec Step 16):
+		// a crash between "started" and "finished" would leave nothing for
+		// the broker to redeliver on reconnect, even with a persistent
+		// session. Manual acking, done by TaskManager only once a task's
+		// outcome is actually known, is what makes that guarantee real.
+		SetAutoAckDisabled(true).
+		// Registered before Connect (not just via RunNewTaskListener's own
+		// topic-specific Subscribe, issued later from OnConnect) so a
+		// redelivered task/new message arriving in the narrow window right
+		// after session resume -- before that Subscribe call has completed
+		// -- still reaches TaskManager instead of being silently dropped by
+		// paho for having no matching local route. See
+		// TaskManager.handleAnyIncoming's own doc comment; confirmed
+		// empirically to matter (without this, a genuine restart-mid-task
+		// test failed: the broker resent the unacked message as designed,
+		// paho received it, and dropped it before RunNewTaskListener's
+		// Subscribe had run).
+		SetDefaultPublishHandler(a.TaskManager.handleAnyIncoming)
 
 	opts.OnConnect = func(mqtt.Client) {
 		a.handleConnect()

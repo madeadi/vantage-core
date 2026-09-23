@@ -173,18 +173,23 @@ func main() {
 	defer cancelPose()
 	go poseListener.Run(poseCtx)
 
-	// MQTT telemetry ingest is additive to the existing gRPC agent path (see
+	// Constructed here (rather than after the MQTT block, as in earlier
+	// steps) because startTelemetryIngest now also wires Step 16's task
+	// dispatch/presence onto the same MQTT connection, and needs all three.
+	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
+	dispatcher := service.NewTaskDispatcher(ar, tRepo)
+	mr := service.NewMissionRegistry(missions)
+	mtm := service.NewMissionTaskManager(dispatcher, mr, tRepo)
+
+	// MQTT telemetry ingest -- and, as of Step 16, task dispatch/presence
+	// too -- is additive to the existing gRPC agent path (see
 	// specs/mqtt_telemetry.specs.md) and off by default -- a core instance
 	// with mqtt.enabled: false in its config runs exactly as it did before
 	// this feature existed.
 	if cfg.MQTT.Enabled {
-		startTelemetryIngest(cfg.MQTT, cfg.Telemetry, pbApp, schemaRegistry, persistRegistry, persistStore, liveBroadcaster)
+		startTelemetryIngest(cfg.MQTT, cfg.Telemetry, pbApp, schemaRegistry, persistRegistry, persistStore, liveBroadcaster, dispatcher, ar, mtm)
 	}
 
-	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
-	dispatcher := service.NewTaskDispatcher(ar, tRepo)
-
-	mr := service.NewMissionRegistry(missions)
 	mc := controller2.NewMissionController(mr, grpcAdvertiseAddr)
 	ac := controller2.NewAgentController(ar, cfg.MQTT)
 
@@ -222,7 +227,6 @@ func main() {
 	)
 	telemetry := service.NewTelemetryListener()
 
-	mtm := service.NewMissionTaskManager(dispatcher, mr, tRepo)
 	grpcSrv := grpc2.NewAgentGRPCServer(ar, telemetry, poseListener, agentLayouts, mtm, dispatcher)
 	agentv1.RegisterAgentServiceServer(grpcServer, grpcSrv)
 

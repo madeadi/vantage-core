@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"vantageos-core/cmd/core/config"
+	"vantageos-core/cmd/core/model"
+	"vantageos-core/cmd/core/service"
 	"vantageos-core/cmd/core/telemetry/events"
 	"vantageos-core/cmd/core/telemetry/ingest"
 	"vantageos-core/cmd/core/telemetry/live"
@@ -42,6 +44,20 @@ const ingestQueueSize = 1024
 // live view exists precisely so an agent developer with no group/contract
 // configured yet can still see what they're sending.
 //
+// dispatcher/ar/tuHandler wire Step 16's task dispatch over MQTT onto this
+// same connection: dispatcher.SetMQTTClient lets SendTask publish task/new
+// for agents with no gRPC stream, and subscribeTaskControlPlane (see
+// cmd/core/task_mqtt.go) subscribes task/status (acks) and event
+// (presence). All three are optional -- nil/zero skips that wiring,
+// letting callers that only care about telemetry (e.g. this function's own
+// tests) opt out of the rest.
+//
+// Every ingested telemetry message also refreshes ar's MQTT presence
+// signal (when ar is non-nil) as a bonus liveness indicator alongside the
+// explicit online/offline events subscribeTaskControlPlane handles -- see
+// AgentRegistry.MarkMQTTOnline's doc comment on why this is a bonus, not
+// the primary signal.
+//
 // Connection failures are logged, not fatal: MQTT telemetry is additive to
 // the existing gRPC agent path, so a broker that's down or misconfigured
 // must not take the rest of core down with it. SetAutoReconnect and
@@ -49,7 +65,12 @@ const ingestQueueSize = 1024
 // the first failure, and OnConnect re-subscribes on every connect (including
 // a reconnect), which is a harmless no-op if the subscription is already
 // live server-side.
-func startTelemetryIngest(cfg config.MQTTConfig, telemetryCfg config.TelemetryConfig, app core.App, schemaRegistry *registry.Registry, persistRegistry *persistcfg.Registry, persistStore *store.Store, liveBroadcaster *live.Broadcaster) *ingest.Daemon {
+func startTelemetryIngest(
+	cfg config.MQTTConfig, telemetryCfg config.TelemetryConfig, app core.App,
+	schemaRegistry *registry.Registry, persistRegistry *persistcfg.Registry, persistStore *store.Store,
+	liveBroadcaster *live.Broadcaster,
+	dispatcher *service.TaskDispatcher, ar *service.AgentRegistry, tuHandler taskUpdatedHandler,
+) *ingest.Daemon {
 	daemon := ingest.New(cfg.TopicPrefix, ingestQueueSize)
 
 	validator := validate.New(schemaRegistry)
@@ -59,6 +80,9 @@ func startTelemetryIngest(cfg config.MQTTConfig, telemetryCfg config.TelemetryCo
 		var violation *validate.Violation
 		switch m.Kind {
 		case ingest.KindTelemetry:
+			if ar != nil {
+				ar.MarkMQTTOnline(model.AgentID(m.AgentID))
+			}
 			violation = validator.Validate(m.AgentID, m.Payload)
 			if persistStore != nil {
 				enqueueTelemetryRow(persistStore, persistRegistry, schemaRegistry, throttler, m, violation)
@@ -89,6 +113,12 @@ func startTelemetryIngest(cfg config.MQTTConfig, telemetryCfg config.TelemetryCo
 		slog.Info("telemetry ingest: mqtt connected", "broker", cfg.Broker)
 		if err := daemon.Subscribe(client); err != nil {
 			slog.Error("telemetry ingest: subscribe failed", "error", err)
+		}
+		if dispatcher != nil {
+			dispatcher.SetMQTTClient(client, cfg.TopicPrefix)
+		}
+		if ar != nil && tuHandler != nil {
+			subscribeTaskControlPlane(client, cfg.TopicPrefix, ar, tuHandler)
 		}
 	}
 	opts.OnConnectionLost = func(_ mqtt.Client, err error) {

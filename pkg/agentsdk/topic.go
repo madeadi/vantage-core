@@ -135,3 +135,30 @@ func AgentIDFromTopic(prefix, topic string) (agentID string, ok bool) {
 	}
 	return rest[:i], true
 }
+
+// TaskIDFromStatusTopic extracts the <taskID> segment from a topic matching
+// TaskStatusFilter (<prefix>/agent/<id>/task/<taskID>/status). It reports
+// false if topic does not have that exact shape -- core's status subscriber
+// uses this alongside AgentIDFromTopic to recover both ids a status update
+// needs.
+func TaskIDFromStatusTopic(prefix, topic string) (taskID string, ok bool) {
+	const suffix = "/status"
+	if !strings.HasSuffix(topic, suffix) {
+		return "", false
+	}
+	trimmed := strings.TrimSuffix(topic, suffix)
+
+	agentID, ok := AgentIDFromTopic(prefix, trimmed)
+	if !ok {
+		return "", false
+	}
+	want := prefix + "/agent/" + agentID + "/" + topicSegTask + "/"
+	if !strings.HasPrefix(trimmed, want) {
+		return "", false
+	}
+	taskID = trimmed[len(want):]
+	if taskID == "" || strings.Contains(taskID, "/") {
+		return "", false
+	}
+	return taskID, true
+}

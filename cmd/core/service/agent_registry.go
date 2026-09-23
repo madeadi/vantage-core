@@ -4,10 +4,29 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 	"vantageos-core/cmd/core/model"
 	"vantageos-core/pkg/agentsdk"
 	agentv1 "vantageos-core/proto/agent/v1"
 )
+
+// mqttPresenceStaleAfter bounds how long an MQTT agent is still considered
+// online after its last liveness signal (an online/registered event, or --
+// as a bonus signal when it happens to be flowing -- an ingested telemetry
+// message) before OnlineAgents stops reporting it, even without an
+// explicit offline event ever arriving.
+//
+// The LWT (see pkg/agentsdk.NewAgent's SetBinaryWill) and retained
+// online/offline events (spec Step 16) are the primary presence signal and
+// transition immediately; this is only the last-resort safety net for the
+// case where neither ever arrives, e.g. a network partition between core
+// and the broker that outlasts core's own reconnect. There is no periodic
+// re-affirmation of "online" once connected (retained events are set once,
+// not republished on a timer), and telemetry may not be flowing at all for
+// a task-only agent -- so this must be generous, not a tight health-check
+// interval, or a perfectly healthy, quiet connection would age out on its
+// own.
+const mqttPresenceStaleAfter = 2 * time.Minute
 
 type AllowedAgent struct {
 	AgentID model.AgentID
@@ -33,6 +52,12 @@ type AgentRegistry struct {
 	skills            map[model.AgentID][]model.AgentSkill
 	cameras           map[model.AgentID][]agentsdk.CameraConfig
 	grpcAdvertiseAddr string
+
+	// mqttLastSeen tracks presence for agents connected over MQTT (spec
+	// Step 16) -- a separate signal from onlineAgents/streams, which is
+	// gRPC-stream-specific. OnlineAgents unions both: an agent counts as
+	// online if it has a live gRPC stream OR a not-yet-stale MQTT signal.
+	mqttLastSeen map[model.AgentID]time.Time
 }
 
 func NewAgentRegistry(
@@ -48,6 +73,7 @@ func NewAgentRegistry(
 		cameras:           make(map[model.AgentID][]agentsdk.CameraConfig),
 		grpcAdvertiseAddr: grpcAdvertiseAddr,
 		authService:       NewAuthService(),
+		mqttLastSeen:      make(map[model.AgentID]time.Time),
 	}
 	r.SetAllowedAgents(allowedAgents)
 	return r
@@ -131,8 +157,50 @@ func (r *AgentRegistry) SendToAgent(agentID model.AgentID, msg *agentv1.ServerMe
 	return true, as.stream.Send(msg)
 }
 
+// MarkMQTTOnline records agentID as alive via MQTT: an explicit
+// online/registered event, or -- as a bonus signal, when it happens to be
+// flowing -- an ingested telemetry message. See mqttPresenceStaleAfter's
+// doc comment for how this and MarkMQTTOffline interact with OnlineAgents.
+func (r *AgentRegistry) MarkMQTTOnline(agentID model.AgentID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.mqttLastSeen[agentID] = time.Now()
+}
+
+// MarkMQTTOffline records agentID as explicitly gone: an offline event
+// (graceful disconnect or the broker delivering the LWT). Immediate, unlike
+// the staleness timeout -- an explicit offline event is a stronger signal
+// than "we simply have not heard from it in a while."
+func (r *AgentRegistry) MarkMQTTOffline(agentID model.AgentID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.mqttLastSeen, agentID)
+}
+
+// OnlineAgents returns every agent currently considered online: gRPC
+// agents with a live stream, unioned with MQTT agents whose last liveness
+// signal is within mqttPresenceStaleAfter. Returns a fresh copy, safe for
+// the caller to read without further locking.
 func (r *AgentRegistry) OnlineAgents() map[model.AgentID]*model.Agent {
-	return r.onlineAgents
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[model.AgentID]*model.Agent, len(r.onlineAgents)+len(r.mqttLastSeen))
+	for id, a := range r.onlineAgents {
+		cp := *a
+		out[id] = &cp
+	}
+	now := time.Now()
+	for id, lastSeen := range r.mqttLastSeen {
+		if now.Sub(lastSeen) >= mqttPresenceStaleAfter {
+			continue
+		}
+		if _, already := out[id]; already {
+			continue
+		}
+		out[id] = &model.Agent{ID: id, Name: r.NameFor(id)}
+	}
+	return out
 }
 
 func (r *AgentRegistry) GetCameras(agentID model.AgentID) []agentsdk.CameraConfig {
