@@ -64,7 +64,7 @@ func startTelemetryIngest(cfg config.MQTTConfig, telemetryCfg config.TelemetryCo
 				enqueueTelemetryRow(persistStore, persistRegistry, schemaRegistry, throttler, m, violation)
 			}
 			if liveBroadcaster != nil {
-				liveBroadcaster.Publish(m.AgentID, m.Payload)
+				publishLiveEnvelope(liveBroadcaster, m, violation)
 			}
 		case ingest.KindTelemetrySchema:
 			violation = validator.CheckSchemaAnnouncement(m.AgentID, m.Payload)
@@ -128,21 +128,7 @@ func enqueueTelemetryRow(persistStore *store.Store, persistRegistry *persistcfg.
 	// no_contract case, which is exactly the SchemaHash a no_contract Row
 	// should carry.
 	entry, _ := schemaRegistry.Resolve(m.AgentID)
-	var valid *bool
-	switch {
-	case validationResult == nil:
-		// hasContract is always true here: Validate only ever returns nil
-		// when a contract exists and the payload satisfied it -- the
-		// no_contract case always comes back as a KindNoContract Violation,
-		// never nil. See validate.Validator.Validate's doc comment.
-		v := true
-		valid = &v
-	case validationResult.Kind == validate.KindNoContract:
-		// valid stays nil -- no contract to validate against.
-	default:
-		v := false
-		valid = &v
-	}
+	valid := validPtr(validationResult)
 
 	spec := persistRegistry.Mapping(groupID)
 	result, mappingViolation := mapping.Apply(spec, m.AgentID, groupID, m.ReceivedAt, m.Payload)
@@ -170,4 +156,43 @@ func enqueueTelemetryRow(persistStore *store.Store, persistRegistry *persistcfg.
 		Fields:     fields,
 		Payload:    m.Payload,
 	})
+}
+
+// validPtr converts a *validate.Violation (as Validate returns it -- see
+// that method's doc comment) into the tri-state store.Row.Valid/live
+// envelope representation: nil for no_contract (no contract to validate
+// against), else &true/&false. Shared by enqueueTelemetryRow and
+// publishLiveEnvelope so both -- persistence and the live view -- agree on
+// what "valid" means for the same violation.
+func validPtr(v *validate.Violation) *bool {
+	switch {
+	case v == nil:
+		t := true
+		return &t
+	case v.Kind == validate.KindNoContract:
+		return nil
+	default:
+		f := false
+		return &f
+	}
+}
+
+// liveEnvelope is what publishLiveEnvelope actually broadcasts -- the raw
+// telemetry payload plus the same validity Step 12 persists, so
+// ui/src/pages/telemetry/Live.tsx (Step 14) can mark each row valid/invalid
+// without re-validating client-side (which would need to fetch and compile
+// the group's JSON Schema in the browser). Valid is omitted (nil) for
+// no_contract, matching store.Row.Valid's tri-state.
+type liveEnvelope struct {
+	Valid   *bool           `json:"valid,omitempty"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+func publishLiveEnvelope(b *live.Broadcaster, m ingest.Message, violation *validate.Violation) {
+	env, err := json.Marshal(liveEnvelope{Valid: validPtr(violation), Payload: m.Payload})
+	if err != nil {
+		slog.Error("telemetry live: marshal envelope failed", "agent_id", m.AgentID, "err", err)
+		return
+	}
+	b.Publish(m.AgentID, env)
 }

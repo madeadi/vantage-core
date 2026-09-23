@@ -40,6 +40,9 @@ func (s *PocketBaseSink) Emit(v validate.Violation, count int, firstSeen, lastSe
 	r.Set("kind", string(v.Kind))
 	r.Set("signature", v.Signature())
 	r.Set("detail", v.Detail)
+	if len(v.Paths) > 0 {
+		r.Set("paths", v.Paths)
+	}
 	if len(v.Sample) > 0 {
 		r.Set("sample", v.Sample)
 	}

@@ -71,6 +71,17 @@ message TelemetryViolationSummary {
     string                     detail    = 2;
     int32                      count     = 3;
     google.protobuf.Timestamp  last_seen = 4;
+
+    // paths are the failing JSON Pointer(s), e.g. "/battery_percent" --
+    // structured form of what `detail` already says in prose. Empty for
+    // Kinds that have no specific path (e.g. no_contract, not_json).
+    repeated string paths = 5;
+    // sample_json is the offending payload (or the prefix of it -- see
+    // validate.Violation.Sample's doc comment on truncation), already JSON
+    // text. Not a google.protobuf.Struct: a truncated/non-JSON payload is
+    // stored as a JSON *string*, not an object, so Struct can't represent
+    // it uniformly.
+    string sample_json = 6;
 }
 
 message GetTelemetryStatusResponse {

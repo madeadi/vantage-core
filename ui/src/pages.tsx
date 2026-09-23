@@ -46,6 +46,14 @@ export function TasksPage() {
   return <Page title="Tasks" />
 }
 
+export function VideoStreamPage() {
+  return <Page title="Video Stream" />
+}
+
+export function RemoteControlPage() {
+  return <Page title="Remote Control" />
+}
+
 function AgentRow({ agent }: { agent: Agent }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border p-4 sm:flex-row sm:items-center sm:justify-between">

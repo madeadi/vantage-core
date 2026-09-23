@@ -7,12 +7,19 @@ import {
   DashboardPage,
   MissionsPage,
   NotFoundPage,
+  RemoteControlPage,
   SettingsAgentGroupsPage,
   SettingsAgentsPage,
   SettingsLayoutsPage,
   TasksPage,
+  VideoStreamPage,
 } from './pages'
 import { Monitoring } from './pages/monitoring/Monitoring'
+import { ContractHealthPage } from './pages/telemetry/ContractHealthPage'
+import { TelemetryIndexPage } from './pages/telemetry/TelemetryIndexPage'
+import { TelemetryLayout } from './pages/telemetry/TelemetryLayout'
+import { TelemetryLivePage } from './pages/telemetry/TelemetryLivePage'
+import { TelemetryReplayPage } from './pages/telemetry/TelemetryReplayPage'
 
 function App() {
   const { isValid } = useAuth()
@@ -28,6 +35,16 @@ function App() {
         <Route path="missions" element={<MissionsPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="monitoring" element={<Monitoring />} />
+        <Route path="video-stream" element={<VideoStreamPage />} />
+        <Route path="remote-control" element={<RemoteControlPage />} />
+        <Route path="telemetry">
+          <Route index element={<TelemetryIndexPage />} />
+          <Route path=":agentId" element={<TelemetryLayout />}>
+            <Route index element={<ContractHealthPage />} />
+            <Route path="live" element={<TelemetryLivePage />} />
+            <Route path="replay" element={<TelemetryReplayPage />} />
+          </Route>
+        </Route>
         <Route path="settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/agents" replace />} />
           <Route path="agents" element={<SettingsAgentsPage />} />

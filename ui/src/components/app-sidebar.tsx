@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Activity, Gamepad2, LayoutDashboard, Settings, Video } from 'lucide-react'
+import { Activity, Gamepad2, LayoutDashboard, Radio, Settings, Video } from 'lucide-react'
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +14,7 @@ import {
 const nav = [
   { title: 'Dashboard', to: '/', icon: LayoutDashboard },
   { title: 'Layout Monitoring', to: '/monitoring', icon: Activity },
+  { title: 'Telemetry', to: '/telemetry', icon: Radio },
   { title: 'Video Stream', to: '/video-stream', icon: Video },
   { title: 'Remote Control', to: '/remote-control', icon: Gamepad2 },
   { title: 'Settings', to: '/settings', icon: Settings },

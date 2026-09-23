@@ -29,6 +29,13 @@ export async function listAgentGroups(signal?: AbortSignal): Promise<AgentGroup[
   })
 }
 
+export async function getAgentGroup(
+  id: string,
+  signal?: AbortSignal,
+): Promise<AgentGroup> {
+  return pb.collection(COLLECTION).getOne<AgentGroup>(id, { requestKey: null, signal })
+}
+
 export async function createAgentGroup(input: AgentGroupInput): Promise<AgentGroup> {
   return pb.collection(COLLECTION).create<AgentGroup>(input)
 }

@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/types"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -139,13 +140,38 @@ func (h *TelemetryConnectHandler) recentViolations(agentID string) ([]*apiv1.Tel
 	out := make([]*apiv1.TelemetryViolationSummary, len(records))
 	for i, r := range records {
 		out[i] = &apiv1.TelemetryViolationSummary{
-			Kind:     r.GetString("kind"),
-			Detail:   r.GetString("detail"),
-			Count:    int32(r.GetInt("count")),
-			LastSeen: timestamppb.New(r.GetDateTime("last_seen").Time()),
+			Kind:       r.GetString("kind"),
+			Detail:     r.GetString("detail"),
+			Count:      int32(r.GetInt("count")),
+			LastSeen:   timestamppb.New(r.GetDateTime("last_seen").Time()),
+			Paths:      violationPaths(r),
+			SampleJson: violationSampleJSON(r),
 		}
 	}
 	return out, nil
+}
+
+// violationPaths decodes agent_events.paths (a JSONField -- see
+// cmd/core/migrations/1788900003_add_paths_to_agent_events.go) back into a
+// string slice. Absent for a violation Kind with no specific path (e.g.
+// no_contract), or for a row written before that migration existed.
+func violationPaths(r *core.Record) []string {
+	var paths []string
+	if err := r.UnmarshalJSONField("paths", &paths); err != nil {
+		return nil
+	}
+	return paths
+}
+
+// violationSampleJSON returns agent_events.sample's raw JSON text verbatim
+// -- see TelemetryViolationSummary.sample_json's doc comment on why this
+// isn't decoded into a Struct.
+func violationSampleJSON(r *core.Record) string {
+	raw, ok := r.Get("sample").(types.JSONRaw)
+	if !ok || len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	return string(raw)
 }
 
 func pointToProto(p query.Point) *apiv1.TelemetryPoint {

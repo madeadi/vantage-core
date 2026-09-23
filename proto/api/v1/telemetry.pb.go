@@ -323,11 +323,21 @@ func (x *GetTelemetryStatusRequest) GetWindow() string {
 }
 
 type TelemetryViolationSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"` // validate.Kind, e.g. "missing_required"
-	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
-	Count         int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
-	LastSeen      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Kind     string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"` // validate.Kind, e.g. "missing_required"
+	Detail   string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	Count    int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	LastSeen *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
+	// paths are the failing JSON Pointer(s), e.g. "/battery_percent" --
+	// structured form of what `detail` already says in prose. Empty for
+	// Kinds that have no specific path (e.g. no_contract, not_json).
+	Paths []string `protobuf:"bytes,5,rep,name=paths,proto3" json:"paths,omitempty"`
+	// sample_json is the offending payload (or the prefix of it -- see
+	// validate.Violation.Sample's doc comment on truncation), already JSON
+	// text. Not a google.protobuf.Struct: a truncated/non-JSON payload is
+	// stored as a JSON *string*, not an object, so Struct can't represent
+	// it uniformly.
+	SampleJson    string `protobuf:"bytes,6,opt,name=sample_json,json=sampleJson,proto3" json:"sample_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -388,6 +398,20 @@ func (x *TelemetryViolationSummary) GetLastSeen() *timestamppb.Timestamp {
 		return x.LastSeen
 	}
 	return nil
+}
+
+func (x *TelemetryViolationSummary) GetPaths() []string {
+	if x != nil {
+		return x.Paths
+	}
+	return nil
+}
+
+func (x *TelemetryViolationSummary) GetSampleJson() string {
+	if x != nil {
+		return x.SampleJson
+	}
+	return ""
 }
 
 type GetTelemetryStatusResponse struct {
@@ -511,12 +535,15 @@ const file_proto_api_v1_telemetry_proto_rawDesc = "" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"N\n" +
 	"\x19GetTelemetryStatusRequest\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x16\n" +
-	"\x06window\x18\x02 \x01(\tR\x06window\"\x96\x01\n" +
+	"\x06window\x18\x02 \x01(\tR\x06window\"\xcd\x01\n" +
 	"\x19TelemetryViolationSummary\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06detail\x18\x02 \x01(\tR\x06detail\x12\x14\n" +
 	"\x05count\x18\x03 \x01(\x05R\x05count\x127\n" +
-	"\tlast_seen\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\blastSeen\"\xc2\x02\n" +
+	"\tlast_seen\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\blastSeen\x12\x14\n" +
+	"\x05paths\x18\x05 \x03(\tR\x05paths\x12\x1f\n" +
+	"\vsample_json\x18\x06 \x01(\tR\n" +
+	"sampleJson\"\xc2\x02\n" +
 	"\x1aGetTelemetryStatusResponse\x12\x19\n" +
 	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12\x19\n" +
 	"\bgroup_id\x18\x02 \x01(\tR\agroupId\x12\x1f\n" +

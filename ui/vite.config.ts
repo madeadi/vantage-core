@@ -18,6 +18,12 @@ export default defineConfig({
       '/api.v1.': { target: 'http://localhost:8080', changeOrigin: true },
       '/agents': { target: 'http://localhost:8080', changeOrigin: true },
       '/missions': { target: 'http://localhost:8080', changeOrigin: true },
+      // Scoped to the live SSE endpoint only, not '/telemetry' -- that
+      // prefix would also swallow the SPA's own /telemetry/:agentId client
+      // routes (direct navigation/refresh hits the dev server for real,
+      // unlike client-side <Link> navigation, and core has no route for
+      // most of that prefix).
+      '/telemetry/live': { target: 'http://localhost:8080', changeOrigin: true },
       '/swagger': { target: 'http://localhost:8080', changeOrigin: true },
       '/api/': { target: 'http://localhost:8090', changeOrigin: true },
       '/_/': { target: 'http://localhost:8090', changeOrigin: true },

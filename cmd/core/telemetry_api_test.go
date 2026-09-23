@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,9 +14,11 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 
 	controller2 "vantageos-core/cmd/core/controller"
+	"vantageos-core/cmd/core/telemetry/events"
 	"vantageos-core/cmd/core/telemetry/live"
 	"vantageos-core/cmd/core/telemetry/query"
 	"vantageos-core/cmd/core/telemetry/registry"
+	"vantageos-core/cmd/core/telemetry/validate"
 	apiv1 "vantageos-core/proto/api/v1"
 	"vantageos-core/proto/api/v1/apiv1connect"
 )
@@ -122,6 +125,65 @@ func TestTelemetryAPIAuth(t *testing.T) {
 			t.Error("schema_hash is empty, want the group's compiled contract hash")
 		}
 	})
+}
+
+// TestGetTelemetryStatusRecentViolationsIncludesPathsAndSample proves
+// agent_events.paths (added by
+// cmd/core/migrations/1788900003_add_paths_to_agent_events.go) and .sample
+// round-trip through GetTelemetryStatus -- Step 14's UI needs the JSON
+// Pointer path shown beside the offending sample payload.
+func TestGetTelemetryStatusRecentViolationsIncludesPathsAndSample(t *testing.T) {
+	app := bootstrapTestApp(t)
+	operatorToken := mustCreateUser(t, app, "op-user", "operator")
+
+	coll, err := app.FindCollectionByNameOrId(events.AgentEventsCollection)
+	if err != nil {
+		t.Fatalf("find agent_events: %v", err)
+	}
+	r := core.NewRecord(coll)
+	r.Set("agent_id", "violation-test-agent")
+	r.Set("type", events.TypeTelemetryViolation)
+	r.Set("severity", "warning")
+	r.Set("kind", string(validate.KindMissingRequired))
+	r.Set("signature", "sig-1")
+	r.Set("detail", "missing required field(s): battery_percent")
+	r.Set("paths", []string{"/battery_percent"})
+	r.Set("sample", json.RawMessage(`{"status":"idle"}`))
+	r.Set("count", 4)
+	r.Set("first_seen", time.Now().Add(-time.Minute))
+	r.Set("last_seen", time.Now())
+	if err := app.Save(r); err != nil {
+		t.Fatalf("save agent_events row: %v", err)
+	}
+
+	handler := controller2.NewTelemetryConnectHandler(app, registry.New(), nil)
+	path, connectHandler := apiv1connect.NewTelemetryServiceHandler(handler,
+		connect.WithInterceptors(controller2.RequireOperatorInterceptor(app)))
+	mux := http.NewServeMux()
+	mux.Handle(path, connectHandler)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	client := apiv1connect.NewTelemetryServiceClient(server.Client(), server.URL)
+
+	req := connect.NewRequest(&apiv1.GetTelemetryStatusRequest{AgentId: "violation-test-agent"})
+	req.Header().Set("Authorization", "Bearer "+operatorToken)
+	resp, err := client.GetTelemetryStatus(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GetTelemetryStatus: %v", err)
+	}
+	if len(resp.Msg.RecentViolations) != 1 {
+		t.Fatalf("got %d recent violations, want 1", len(resp.Msg.RecentViolations))
+	}
+	v := resp.Msg.RecentViolations[0]
+	if len(v.Paths) != 1 || v.Paths[0] != "/battery_percent" {
+		t.Errorf("paths = %v, want [/battery_percent]", v.Paths)
+	}
+	if v.SampleJson != `{"status":"idle"}` {
+		t.Errorf("sample_json = %q, want {\"status\":\"idle\"}", v.SampleJson)
+	}
+	if v.Count != 4 {
+		t.Errorf("count = %d, want 4", v.Count)
+	}
 }
 
 // TestQueryTelemetryReturnsStoredPoints is Step 13's "query" requirement,
