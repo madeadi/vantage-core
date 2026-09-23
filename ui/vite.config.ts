@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 8320,
     // Proxy API + agent/mission control-plane calls to the core server (HTTP on :8321),
     // and PocketBase (auth / collections) to the embedded instance on :8090.
     proxy: {
