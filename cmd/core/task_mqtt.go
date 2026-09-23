@@ -12,13 +12,12 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-// taskUpdatedHandler is the minimal interface both the gRPC and MQTT
-// inbound paths need. Satisfied by *service.MissionTaskManager, the one
-// place a task ack is actually applied: it looks up the task by id and
-// sets its status/result, so handling the same ack twice has no
-// additional effect -- exactly the idempotency spec Step 16 asks for on
-// the receiving end (QoS 1 can redeliver a status update same as it can a
-// new task).
+// taskUpdatedHandler is the interface the MQTT task/status inbound path
+// needs. Satisfied by *service.MissionTaskManager, the one place a task
+// ack is actually applied: it looks up the task by id and sets its
+// status/result, so handling the same ack twice has no additional effect
+// -- exactly the idempotency spec Step 16 asks for on the receiving end
+// (QoS 1 can redeliver a status update same as it can a new task).
 type taskUpdatedHandler interface {
 	OnTaskUpdated(ack *agentv1.TaskAck)
 }
@@ -42,10 +41,10 @@ func subscribeTaskControlPlane(client mqtt.Client, topicPrefix string, ar *servi
 
 // taskStatusHandler decodes an agentsdk.TaskStatusPayload off a
 // task/<id>/status message and applies it through tuHandler, having built
-// an agentv1.TaskAck from it -- the same status-application code path the
-// gRPC StreamTasks handler already uses (cmd/core/grpc/agent_grpc.go),
-// so both transports converge on one place that decides what a status
-// update means.
+// an agentv1.TaskAck from it -- agentv1.TaskAck's shape (kept even after
+// the gRPC StreamTasks RPC it originally served was removed in Step 17)
+// is what lets MissionTaskManager.OnTaskUpdated stay the one place that
+// decides what a status update means.
 func taskStatusHandler(topicPrefix string, tuHandler taskUpdatedHandler) mqtt.MessageHandler {
 	return func(_ mqtt.Client, msg mqtt.Message) {
 		agentID, ok := agentsdk.AgentIDFromTopic(topicPrefix, msg.Topic())

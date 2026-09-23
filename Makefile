@@ -1,18 +1,8 @@
 dev-core:
 	air -c .air.core.toml
 
-dev-sps-mr:
-	air -c .air.sps-mr.toml
-
-dev-sps-mission:
-	air -c .air.sps-mission.toml
-
 dev-mqtt-agent:
 	air -c .air.mqtt-agent-example.toml
-
-.PHONY: dev-sps
-dev-sps:
-	$(MAKE) -j3 dev-core dev-sps-mr dev-sps-mission
 
 .PHONY: proto
 proto:

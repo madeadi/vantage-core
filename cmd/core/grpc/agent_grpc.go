@@ -22,14 +22,6 @@ type LayoutPoseListener interface {
 	OnPoseUpdate(agentID model.AgentID, pose *agentv1.PoseTelemetryEvent)
 }
 
-type TaskUpdatedHandler interface {
-	OnTaskUpdated(ack *agentv1.TaskAck)
-}
-
-type Reconnector interface {
-	OnReconnect(agentID model.AgentID)
-}
-
 // AgentServer is the gRPC AgentService implementation plus the hooks core uses
 // to push live config changes into it.
 type AgentServer interface {
@@ -41,30 +33,21 @@ type AgentServer interface {
 
 type agentGRPCServer struct {
 	agentv1.UnimplementedAgentServiceServer
-	registry    *service.AgentRegistry
-	telemetry   *service.TelemetryListener
-	pose        LayoutPoseListener
-	layouts     atomic.Pointer[[]config.AgentLayoutConfig]
-	reconnector Reconnector // handle reconnects from agent
-	tuHandler   TaskUpdatedHandler
+	registry *service.AgentRegistry
+	pose     LayoutPoseListener
+	layouts  atomic.Pointer[[]config.AgentLayoutConfig]
 
 	authService service.AuthService
 }
 
 func NewAgentGRPCServer(
 	registry *service.AgentRegistry,
-	telemetry *service.TelemetryListener,
 	pose LayoutPoseListener,
 	layouts []config.AgentLayoutConfig,
-	tuHandler TaskUpdatedHandler,
-	reconnector Reconnector,
 ) AgentServer {
 	s := &agentGRPCServer{
-		registry:    registry,
-		telemetry:   telemetry,
-		pose:        pose,
-		tuHandler:   tuHandler,
-		reconnector: reconnector,
+		registry: registry,
+		pose:     pose,
 	}
 	s.SetLayouts(layouts)
 	return s
@@ -73,51 +56,6 @@ func NewAgentGRPCServer(
 func (s *agentGRPCServer) SetLayouts(layouts []config.AgentLayoutConfig) {
 	next := append([]config.AgentLayoutConfig(nil), layouts...)
 	s.layouts.Store(&next)
-}
-
-func (s *agentGRPCServer) StreamTasks(stream agentv1.AgentService_StreamTasksServer) error {
-	agentID := agentIDFromContext(stream.Context())
-	slog.Info("StreamTasks: agentsdk connected", "agent_id", agentID)
-
-	s.registry.AttachStream(agentID, stream)
-
-	s.reconnector.OnReconnect(agentID)
-
-	defer func() {
-		s.registry.DetachStream(agentID)
-		slog.Info("StreamTasks: agentsdk disconnected", "agent_id", agentID)
-	}()
-
-	for {
-		ack, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			slog.Error("StreamTasks: recv error", "agent_id", agentID, "err", err)
-			return err
-		}
-		slog.Info("task ack received", "agent_id", agentID, "task_id", ack.TaskId, "status", ack.Status)
-		s.tuHandler.OnTaskUpdated(ack)
-	}
-}
-
-func (s *agentGRPCServer) ReportTelemetry(stream agentv1.AgentService_ReportTelemetryServer) error {
-	agentID := agentIDFromContext(stream.Context())
-	slog.Info("ReportTelemetry: agentsdk connected", "agent_id", agentID)
-
-	for {
-		event, err := stream.Recv()
-		if err == io.EOF {
-			_ = stream.SendAndClose(&agentv1.TelemetryAck{})
-			return nil
-		}
-		if err != nil {
-			slog.Error("ReportTelemetry: recv error", "agent_id", agentID, "err", err)
-			return err
-		}
-		s.telemetry.Handle(agentID, event)
-	}
 }
 
 func (s *agentGRPCServer) ReportPoseTelemetry(stream agentv1.AgentService_ReportPoseTelemetryServer) error {

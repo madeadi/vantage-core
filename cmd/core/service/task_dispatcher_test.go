@@ -25,9 +25,8 @@ import (
 // catch, since GetActiveTasksByAgent and SaveTask each lock and unlock
 // independently; only holding one lock across both closes the window.
 func TestSendTaskConcurrentDispatchesOnlyOneSucceeds(t *testing.T) {
-	ar := NewAgentRegistry(nil, "localhost:9090")
 	repo := repository.NewTaskRepoMemory()
-	d := NewTaskDispatcher(ar, repo)
+	d := NewTaskDispatcher(repo)
 
 	const n = 50
 	var wg sync.WaitGroup
@@ -55,9 +54,8 @@ func TestSendTaskConcurrentDispatchesOnlyOneSucceeds(t *testing.T) {
 }
 
 func TestSendTaskRejectsWhenAlreadyBusy(t *testing.T) {
-	ar := NewAgentRegistry(nil, "localhost:9090")
 	repo := repository.NewTaskRepoMemory()
-	d := NewTaskDispatcher(ar, repo)
+	d := NewTaskDispatcher(repo)
 
 	first := &model.Task{ID: "task-1", AgentID: "bot-1", Type: "PING", Status: model.TaskStatusDraft}
 	_ = d.SendTask(first) // saved regardless of delivery outcome -- see doc comment on SendTask
@@ -69,12 +67,11 @@ func TestSendTaskRejectsWhenAlreadyBusy(t *testing.T) {
 	}
 }
 
-func TestSendTaskFallsBackToMQTTWhenNoGRPCStream(t *testing.T) {
+func TestSendTaskPublishesToMQTT(t *testing.T) {
 	brokerAddr := newDispatcherTestBroker(t)
 
-	ar := NewAgentRegistry(nil, "localhost:9090")
 	repo := repository.NewTaskRepoMemory()
-	d := NewTaskDispatcher(ar, repo)
+	d := NewTaskDispatcher(repo)
 
 	pubOpts := mqtt.NewClientOptions().AddBroker("tcp://" + brokerAddr).SetClientID("core-under-test")
 	pubClient := mqtt.NewClient(pubOpts)
@@ -120,15 +117,14 @@ func TestSendTaskFallsBackToMQTTWhenNoGRPCStream(t *testing.T) {
 	}
 }
 
-func TestSendTaskFailsWhenNeitherGRPCNorMQTTAvailable(t *testing.T) {
-	ar := NewAgentRegistry(nil, "localhost:9090")
+func TestSendTaskFailsWhenMQTTNotConfigured(t *testing.T) {
 	repo := repository.NewTaskRepoMemory()
-	d := NewTaskDispatcher(ar, repo)
+	d := NewTaskDispatcher(repo)
 
 	task := &model.Task{ID: "task-1", AgentID: "bot-1", Type: "PING", Status: model.TaskStatusDraft}
 	err := d.SendTask(task)
 	if err == nil || err.Error() != "no active stream for agent" {
-		t.Errorf("SendTask with no transport = %v, want \"no active stream for agent\"", err)
+		t.Errorf("SendTask with no MQTT client = %v, want \"no active stream for agent\"", err)
 	}
 }
 

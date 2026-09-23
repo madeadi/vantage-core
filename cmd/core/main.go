@@ -174,18 +174,18 @@ func main() {
 	go poseListener.Run(poseCtx)
 
 	// Constructed here (rather than after the MQTT block, as in earlier
-	// steps) because startTelemetryIngest now also wires Step 16's task
+	// steps) because startTelemetryIngest also wires Step 16's task
 	// dispatch/presence onto the same MQTT connection, and needs all three.
 	ar := service.NewAgentRegistry(allowedAgents, grpcAdvertiseAddr)
-	dispatcher := service.NewTaskDispatcher(ar, tRepo)
+	dispatcher := service.NewTaskDispatcher(tRepo)
 	mr := service.NewMissionRegistry(missions)
 	mtm := service.NewMissionTaskManager(dispatcher, mr, tRepo)
 
-	// MQTT telemetry ingest -- and, as of Step 16, task dispatch/presence
-	// too -- is additive to the existing gRPC agent path (see
-	// specs/mqtt_telemetry.specs.md) and off by default -- a core instance
-	// with mqtt.enabled: false in its config runs exactly as it did before
-	// this feature existed.
+	// MQTT telemetry ingest, task dispatch and presence (specs/mqtt_telemetry.specs.md
+	// Steps 6/16) are off by default -- a core instance with mqtt.enabled:
+	// false in its config has no task transport and no telemetry ingest at
+	// all (the gRPC ReportTelemetry/StreamTasks RPCs that used to provide a
+	// fallback were removed in Step 17).
 	if cfg.MQTT.Enabled {
 		startTelemetryIngest(cfg.MQTT, cfg.Telemetry, pbApp, schemaRegistry, persistRegistry, persistStore, liveBroadcaster, dispatcher, ar, mtm)
 	}
@@ -225,9 +225,8 @@ func main() {
 		grpc.UnaryInterceptor(grpc2.AuthUnaryInterceptor(ar.AuthService())),
 		grpc.StreamInterceptor(combinedAuthStreamInterceptor(ar, mr)),
 	)
-	telemetry := service.NewTelemetryListener()
 
-	grpcSrv := grpc2.NewAgentGRPCServer(ar, telemetry, poseListener, agentLayouts, mtm, dispatcher)
+	grpcSrv := grpc2.NewAgentGRPCServer(ar, poseListener, agentLayouts)
 	agentv1.RegisterAgentServiceServer(grpcServer, grpcSrv)
 
 	// Re-dispatch config-collection edits into the registries without a restart,

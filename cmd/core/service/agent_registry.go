@@ -7,7 +7,6 @@ import (
 	"time"
 	"vantageos-core/cmd/core/model"
 	"vantageos-core/pkg/agentsdk"
-	agentv1 "vantageos-core/proto/agent/v1"
 )
 
 // mqttPresenceStaleAfter bounds how long an MQTT agent is still considered
@@ -34,11 +33,6 @@ type AllowedAgent struct {
 	Key     string
 }
 
-type agentStream struct {
-	stream agentv1.AgentService_StreamTasksServer
-	mu     sync.Mutex
-}
-
 type AgentRegistry struct {
 	mu          sync.RWMutex
 	authService AuthService
@@ -47,16 +41,16 @@ type AgentRegistry struct {
 	// swapped wholesale by SetAllowedAgents when that collection changes, so it
 	// is held in an atomic pointer rather than guarded by mu.
 	allowedAgents     atomic.Pointer[[]AllowedAgent]
-	onlineAgents      map[model.AgentID]*model.Agent
-	streams           map[model.AgentID]*agentStream
 	skills            map[model.AgentID][]model.AgentSkill
 	cameras           map[model.AgentID][]agentsdk.CameraConfig
 	grpcAdvertiseAddr string
 
 	// mqttLastSeen tracks presence for agents connected over MQTT (spec
-	// Step 16) -- a separate signal from onlineAgents/streams, which is
-	// gRPC-stream-specific. OnlineAgents unions both: an agent counts as
-	// online if it has a live gRPC stream OR a not-yet-stale MQTT signal.
+	// Step 16) -- the only presence signal now that task dispatch and
+	// telemetry no longer use a gRPC stream (spec Step 17 removed the
+	// gRPC-stream-based AttachStream/DetachStream/SendToAgent path
+	// entirely, per "Reconnector's active-task re-dispatch can be replaced
+	// by a persistent session").
 	mqttLastSeen map[model.AgentID]time.Time
 }
 
@@ -67,8 +61,6 @@ func NewAgentRegistry(
 	slog.Info("NewAgentRegistry")
 
 	r := &AgentRegistry{
-		onlineAgents:      make(map[model.AgentID]*model.Agent),
-		streams:           make(map[model.AgentID]*agentStream),
 		skills:            make(map[model.AgentID][]model.AgentSkill),
 		cameras:           make(map[model.AgentID][]agentsdk.CameraConfig),
 		grpcAdvertiseAddr: grpcAdvertiseAddr,
@@ -127,36 +119,6 @@ func (r *AgentRegistry) NameFor(agentID model.AgentID) string {
 	return ""
 }
 
-// AttachStream marks an agentsdk online and stores its live gRPC stream.
-func (r *AgentRegistry) AttachStream(agentID model.AgentID, s agentv1.AgentService_StreamTasksServer) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.onlineAgents[agentID] = &model.Agent{ID: agentID, Name: r.NameFor(agentID)}
-	r.streams[agentID] = &agentStream{stream: s}
-}
-
-// DetachStream marks an agentsdk offline and removes its stream.
-func (r *AgentRegistry) DetachStream(agentID model.AgentID) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.onlineAgents, agentID)
-	delete(r.streams, agentID)
-}
-
-// SendToAgent serializes and sends msg on the agent's live gRPC stream, if any.
-// online is false when the agent has no active stream.
-func (r *AgentRegistry) SendToAgent(agentID model.AgentID, msg *agentv1.ServerMessage) (online bool, err error) {
-	r.mu.RLock()
-	as, ok := r.streams[agentID]
-	r.mu.RUnlock()
-	if !ok {
-		return false, nil
-	}
-	as.mu.Lock()
-	defer as.mu.Unlock()
-	return true, as.stream.Send(msg)
-}
-
 // MarkMQTTOnline records agentID as alive via MQTT: an explicit
 // online/registered event, or -- as a bonus signal, when it happens to be
 // flowing -- an ingested telemetry message. See mqttPresenceStaleAfter's
@@ -177,25 +139,17 @@ func (r *AgentRegistry) MarkMQTTOffline(agentID model.AgentID) {
 	delete(r.mqttLastSeen, agentID)
 }
 
-// OnlineAgents returns every agent currently considered online: gRPC
-// agents with a live stream, unioned with MQTT agents whose last liveness
-// signal is within mqttPresenceStaleAfter. Returns a fresh copy, safe for
-// the caller to read without further locking.
+// OnlineAgents returns every agent currently considered online: those whose
+// last MQTT liveness signal is within mqttPresenceStaleAfter. Returns a
+// fresh copy, safe for the caller to read without further locking.
 func (r *AgentRegistry) OnlineAgents() map[model.AgentID]*model.Agent {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	out := make(map[model.AgentID]*model.Agent, len(r.onlineAgents)+len(r.mqttLastSeen))
-	for id, a := range r.onlineAgents {
-		cp := *a
-		out[id] = &cp
-	}
+	out := make(map[model.AgentID]*model.Agent, len(r.mqttLastSeen))
 	now := time.Now()
 	for id, lastSeen := range r.mqttLastSeen {
 		if now.Sub(lastSeen) >= mqttPresenceStaleAfter {
-			continue
-		}
-		if _, already := out[id]; already {
 			continue
 		}
 		out[id] = &model.Agent{ID: id, Name: r.NameFor(id)}

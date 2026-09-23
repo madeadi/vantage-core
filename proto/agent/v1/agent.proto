@@ -6,14 +6,11 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "vantageos-core/proto/agentsdk/v1;agentv1";
 
-// AgentService is the gRPC contract between core and agents.
+// AgentService is the gRPC contract between core and agents. Task dispatch
+// and telemetry ingest moved to MQTT (specs/mqtt_telemetry.specs.md Steps
+// 16-17, StreamTasks/ReportTelemetry removed); pose streaming and the two
+// RPCs below stay gRPC until Step 17's "pose and missions move" follow-up.
 service AgentService {
-    // Core streams tasks down to the agent. It will also tell the core that
-    // agent is alive or not.
-    rpc StreamTasks(stream TaskAck) returns (stream ServerMessage);
-
-    // Agent streams telemetry up to core.
-    rpc ReportTelemetry(stream TelemetryEvent) returns (TelemetryAck);
     // Agent streams the pose telemetry up to core
     rpc ReportPoseTelemetry(stream PoseTelemetryEvent) returns (PoseTelemetryAck);
 
@@ -23,17 +20,11 @@ service AgentService {
     rpc ReportSkills(SkillRegistration) returns (SkillRegistrationAck);
 }
 
-message ServerMessage {
-    oneof payload {
-        Task task = 1;
-        AbortCommand abort = 2;
-    }
-}
-
-message AbortCommand {
-  string task_id = 1;
-}
-
+// TaskAck's shape is still shared by both a StreamTasks-era gRPC caller (now
+// removed) and the MQTT path (cmd/core/task_mqtt.go's taskStatusHandler
+// decodes agentsdk.TaskStatusPayload off the wire and builds one of these),
+// so both transports' status updates converge on the same
+// TaskUpdatedHandler.OnTaskUpdated code path.
 message TaskAck {
     string task_id = 1;
     TaskStatus status = 2; // robot sends: CANNOT_START, STARTED, ABORTED, FAILED, FINISHED
@@ -76,13 +67,6 @@ message AgentContext {
     string mission_context = 2;
     bytes context = 3;
 }
-
-message TelemetryEvent {
-    string agent_id = 1;
-    bytes  payload  = 2; // opaque telemetry payload (matches current raw bytes)
-}
-
-message TelemetryAck {}
 
 // Pose Telemetry
 message PoseTelemetryEvent {

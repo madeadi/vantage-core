@@ -8,17 +8,14 @@ import (
 	"vantageos-core/cmd/core/model"
 	"vantageos-core/cmd/core/repository"
 	"vantageos-core/pkg/agentsdk"
-	agentv1 "vantageos-core/proto/agent/v1"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-// TaskDispatcher dispatches tasks to agents -- over a live gRPC stream when
-// one exists, or by publishing to the agent's MQTT task/new topic
-// otherwise (spec Step 16) -- enforcing the single-active-task-per-agent
-// rule.
+// TaskDispatcher dispatches tasks to agents by publishing to the agent's
+// MQTT task/new topic (spec Step 16; the gRPC StreamTasks dispatch path was
+// removed in Step 17), enforcing the single-active-task-per-agent rule.
 type TaskDispatcher struct {
-	registry *AgentRegistry
 	taskRepo repository.TaskRepo
 
 	// mu serializes SendTask's busy-check + save so two concurrent
@@ -32,20 +29,19 @@ type TaskDispatcher struct {
 
 	// mqttClient/mqttTopicPrefix are set once core's MQTT connection comes
 	// up (see cmd/core/telemetry.go); nil/empty when MQTT is disabled, in
-	// which case SendTask falls back to gRPC-only behavior exactly as
-	// before this feature existed.
+	// which case SendTask always fails with "no active stream for agent".
 	mqttMu          sync.RWMutex
 	mqttClient      mqtt.Client
 	mqttTopicPrefix string
 }
 
-func NewTaskDispatcher(registry *AgentRegistry, taskRepo repository.TaskRepo) *TaskDispatcher {
-	return &TaskDispatcher{registry: registry, taskRepo: taskRepo}
+func NewTaskDispatcher(taskRepo repository.TaskRepo) *TaskDispatcher {
+	return &TaskDispatcher{taskRepo: taskRepo}
 }
 
-// SetMQTTClient attaches core's MQTT client, enabling task/new publish for
-// agents with no live gRPC stream. Safe to call once the client connects;
-// call again on every reconnect (idempotent -- just replaces the client).
+// SetMQTTClient attaches core's MQTT client, enabling task/new publish.
+// Safe to call once the client connects; call again on every reconnect
+// (idempotent -- just replaces the client).
 func (d *TaskDispatcher) SetMQTTClient(client mqtt.Client, topicPrefix string) {
 	d.mqttMu.Lock()
 	defer d.mqttMu.Unlock()
@@ -59,17 +55,14 @@ func (d *TaskDispatcher) mqtt() (mqtt.Client, string) {
 	return d.mqttClient, d.mqttTopicPrefix
 }
 
-// SendTask persists the task and dispatches it: over the agent's live gRPC
-// stream if it has one, else by publishing to its MQTT task/new topic
-// (QoS 1 -- redelivery is possible, per-task idempotency is the agent
-// SDK's job, see pkg/agentsdk/task_manager.go) if MQTT is configured.
-// Persistent MQTT sessions (CleanSession=false) mean the broker itself
-// queues the publish for a currently-disconnected-but-subscribed agent, so
-// unlike the gRPC path this never needs an explicit reconnect-triggered
-// resend for that case (see OnReconnect's own doc comment) -- the publish
-// either succeeds now or the agent was never provisioned for MQTT at all,
-// in which case it fails the same way an offline gRPC-only agent already
-// did.
+// SendTask persists the task and publishes it to the agent's MQTT
+// task/new topic (QoS 1 -- redelivery is possible, per-task idempotency is
+// the agent SDK's job, see pkg/agentsdk/task_manager.go) if MQTT is
+// configured. Persistent MQTT sessions (CleanSession=false) mean the
+// broker itself queues the publish for a currently-disconnected-but-
+// subscribed agent -- the publish either succeeds now or the agent was
+// never provisioned for MQTT at all, in which case it fails the same way
+// an offline agent already did before Step 16.
 func (d *TaskDispatcher) SendTask(task *model.Task) error {
 	d.mu.Lock()
 	if active := d.taskRepo.GetActiveTasksByAgent(task.AgentID); len(active) > 0 {
@@ -83,15 +76,6 @@ func (d *TaskDispatcher) SendTask(task *model.Task) error {
 	}
 	d.mu.Unlock()
 
-	online, err := d.registry.SendToAgent(task.AgentID, grpcTaskMessage(task))
-	if err != nil {
-		slog.Error("Failed to send task to agent over gRPC", "err", err)
-		return err
-	}
-	if online {
-		return nil
-	}
-
 	client, topicPrefix := d.mqtt()
 	if client == nil {
 		return errors.New("no active stream for agent")
@@ -101,16 +85,6 @@ func (d *TaskDispatcher) SendTask(task *model.Task) error {
 		return errors.New("no active stream for agent")
 	}
 	return nil
-}
-
-func grpcTaskMessage(task *model.Task) *agentv1.ServerMessage {
-	return &agentv1.ServerMessage{
-		Payload: &agentv1.ServerMessage_Task{Task: &agentv1.Task{
-			Id:      task.ID,
-			Type:    task.Type,
-			Payload: task.Payload,
-		}},
-	}
 }
 
 // publishNewTask publishes task to its agent's Topic.NewTask(), QoS 1, not
@@ -131,25 +105,6 @@ func publishNewTask(client mqtt.Client, topicPrefix string, task *model.Task) er
 	token := client.Publish(topic.NewTask(), 1, false, b)
 	token.Wait()
 	return token.Error()
-}
-
-// OnReconnect re-dispatches an agent's active task after it reconnects --
-// the gRPC path's own mechanism, since a gRPC stream carries no queued
-// state across a drop the way a persistent MQTT session does. Only ever
-// invoked by the gRPC reconnect handler (see cmd/core/grpc/agent_grpc.go),
-// so an MQTT-only agent never reaches this; it does not need to, per
-// SendTask's own doc comment.
-func (d *TaskDispatcher) OnReconnect(agentID model.AgentID) {
-	activeTasks := d.taskRepo.GetActiveTasksByAgent(agentID)
-	if len(activeTasks) == 0 {
-		return
-	}
-
-	err := d.SendTask(activeTasks[0]) // send the first active task to the agent
-	slog.Info("Reconnected agent", "agentID", agentID, "taskID", activeTasks[0].ID)
-	if err != nil {
-		slog.Error("Failed to send active task to agent", "err", err)
-	}
 }
 
 func (d *TaskDispatcher) FindTask(taskID string) (*model.Task, error) {

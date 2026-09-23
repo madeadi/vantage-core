@@ -9,13 +9,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 go build ./...
 
 # Run with hot reload (requires air)
-make dev-core       # runs cmd/core with core.config.yaml
-make dev-smallbot   # runs cmd/smallbot with smallbot.config.yaml
-make dev-sps-mr     # runs cmd/sps-mr with spsmr.config.yaml
+make dev-core        # runs cmd/core with core.config.yaml
+make dev-mqtt-agent  # runs cmd/mqtt-agent-example, a minimal reference MQTT agent
 
 # Run directly
 go run ./cmd/core -config core.config.yaml
-go run ./cmd/smallbot -config smallbot.config.yaml
+go run ./cmd/mqtt-agent-example -core-url http://127.0.0.1:8080 -key <device-key>
 
 # Regenerate protobuf
 make proto
@@ -38,17 +37,22 @@ app user; recreate the superuser with the command above (or via the `/_/` first-
 Multiple binaries share a single module (`vantageos-core`):
 
 - **`cmd/core`** — the central server. Runs HTTP on `:8080` and gRPC on `:9090`.
-- **`cmd/smallbot`** — reference agent implementation.
-- **`cmd/sps-mr`** — SPS mobile robot agent.
-- **`cmd/mission-sps`** — SPS food delivery mission runner.
+- **`cmd/mqtt-agent-example`** — minimal runnable reference agent proving the MQTT SDK (`pkg/agentsdk`) end-to-end; copy this as a starting point for a real agent.
+- **`cmd/telemetry-schema`** — CLI for deriving/inspecting a telemetry JSON Schema from a Go struct.
+
+Task dispatch and telemetry ingest are MQTT-based (see
+`specs/mqtt_telemetry.specs.md`); pose streaming, the affine transform
+lookup, and skill registration still use gRPC (`AgentService` on `:9090`).
+An agent needs both transports.
 
 ### Communication flow
 
-1. Agent POSTs `Bearer <device-key>` to `POST /agents/register` → receives `{ agent_id, token, grpc_url }`
-2. Agent opens gRPC stream `AgentService.StreamTasks` with metadata `authorization: Bearer <token>` and `agent_id: <id>`
-3. Core pushes tasks as `ServerMessage` over the stream; agent replies with `TaskAck` status updates
-4. Agent opens `AgentService.ReportTelemetry` and `AgentService.ReportPoseTelemetry` streams for sensor data and pose
-5. On reconnect, core re-dispatches any active tasks to the agent automatically
+1. Agent POSTs `Bearer <device-key>` to `POST /agents/register` → receives `{ agent_id, token, grpc_url, broker_url, username, password, topic_prefix }` (`pkg/agentsdk.Register`)
+2. Agent connects to the MQTT broker with `CleanSession=false`, QoS 1, and an LWT on `<prefix>/agent/<id>/event` (`pkg/agentsdk.NewAgent`)
+3. Core publishes new tasks to `<prefix>/agent/<id>/task/new`; the agent's `TaskManager` runs the registered handler and publishes status to `<prefix>/agent/<id>/task/<task_id>/status`, deduping QoS-1 redeliveries against a bounded LRU of recently-seen task IDs
+4. Agent publishes telemetry to `<prefix>/agent/<id>/telemetry`; core validates it against the agent's `agent_groups.telemetry_schema` and optionally persists it (Postgres/TimescaleDB)
+5. Agent still opens the gRPC `AgentService.ReportPoseTelemetry` stream for pose, calls `GetTransformationMatrices` for the agent↔layout affine transform, and calls `ReportSkills` to register its skill inventory
+6. A persistent MQTT session (`CleanSession=false`) means the broker itself queues an offline agent's tasks and redelivers them on reconnect — no gRPC-style reconnect-triggered re-dispatch is needed
 
 ### Configuration
 
@@ -77,27 +81,27 @@ recorded in `_migrations` so each runs once per DB.
 `cmd/core/pbconfig.go` keeps only the runtime pieces:
 
 - `loadAllowedAgents` / `loadMissions` / `loadAgentLayouts` populate the registries at startup.
-- `watchConfig` binds `OnRecordAfter{Create,Update,Delete}Success` hooks so edits live-reload into the registries with no restart. An agent/mission with a live gRPC stream keeps it until it reconnects — token removal only blocks new registrations.
+- `watchConfig` binds `OnRecordAfter{Create,Update,Delete}Success` hooks so edits live-reload into the registries with no restart. A mission with a live gRPC stream keeps it until it reconnects; an agent's MQTT session is independent of this config reload — token removal only blocks new registrations.
 
 ### Key packages
 
-- **`pkg/agentsdk`** — agent-side SDK: skill runner, service manager, task dispatcher used by agent binaries.
+- **`pkg/agentsdk`** — the MQTT agent SDK: `Agent`/`NewAgent` (connection lifecycle, LWT, lifecycle events), `TaskManager` (task dispatch, idempotent redelivery handling, manual acking), `Telemetry[T]` (schema derivation + publish loop), `Register` (device-key bootstrap). `pkg/agentsdk/agent_skill`, `task_handler`, `dummy_bot`, `slamtec`, `server`, and `service` are older gRPC-era robot-skill/task-handling building blocks kept for reference; no binary in this repo currently uses them.
 - **`pkg/pubsub`** — legacy WebSocket pub/sub hub (unused by core, kept for reference).
 - **`pkg/util`** — shared utilities.
 
 ### Inside `cmd/core`
 
-- `AgentRegistry` — tracks allowed agents (pre-shared keys), online agents, tokens, skills, and gRPC streams. Implements `Reconnector` to re-dispatch active tasks on reconnect. `SetAllowedAgents` atomically swaps the allowed set (used by `watchConfig`); `MissionRegistry.SetAllowed` and `agentGRPCServer.SetLayouts` do the same for their config.
+- `AgentRegistry` — tracks allowed agents (pre-shared keys), skills, cameras, and MQTT presence (`MarkMQTTOnline`/`MarkMQTTOffline`, with a staleness timeout as a last-resort safety net — see `mqttPresenceStaleAfter`). `SetAllowedAgents` atomically swaps the allowed set (used by `watchConfig`); `MissionRegistry.SetAllowed` and `agentGRPCServer.SetLayouts` do the same for their config.
 - `TaskRepo` / `TaskRepoMemory` — stores tasks; read methods return copies to avoid data races.
-- `TaskUpdatedHandlerMemory` — updates task status in the repo when a `TaskAck` arrives from an agent.
-- `TelemetryListener` — handles inbound telemetry events from agents.
-- `agentGRPCServer` — gRPC server implementing `StreamTasks`, `ReportTelemetry`, `ReportPoseTelemetry`, and `GetTransformationMatrices`.
+- `TaskDispatcher` — persists a task then publishes it to the agent's MQTT `task/new` topic; `MissionTaskManager.OnTaskUpdated` applies status updates decoded off the MQTT `task/status` topic (`cmd/core/task_mqtt.go`). gRPC task dispatch (`StreamTasks`) was removed once the MQTT path shipped (`specs/mqtt_telemetry.specs.md` Step 17).
+- `agentGRPCServer` — gRPC server implementing `ReportPoseTelemetry`, `GetTransformationMatrices`, and `ReportSkills`. `StreamTasks`/`ReportTelemetry` were removed once MQTT task dispatch/telemetry ingest replaced them.
 
 ### Task dispatch invariants
 
-- Tasks are saved to the repo **before** being sent over the gRPC stream (prevents dropped ACKs on fast agents).
+- Tasks are saved to the repo **before** being published to MQTT (prevents dropped status updates on fast agents).
 - Only one active task per agent is allowed; `SendTask` rejects with "agent is busy" if `GetActiveTasksByAgent` returns results.
-- Both checks happen inside `as.mu.Lock()` so they are atomic with respect to concurrent dispatch attempts.
+- Both checks happen inside `TaskDispatcher.mu.Lock()` so they are atomic with respect to concurrent dispatch attempts.
+- Task status can be redelivered at least once (MQTT QoS 1); `pkg/agentsdk.TaskManager` dedups on the agent side, and `MissionTaskManager.OnTaskUpdated` applying the same ack twice is itself a no-op.
 
 ### Swagger
 
