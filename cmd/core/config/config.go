@@ -13,6 +13,10 @@ import (
 // missions, layouts and agent↔layout transforms — lives in PocketBase
 // collections and is loaded (and live-reloaded) from there. See cmd/core/pbconfig.go.
 type Config struct {
+	// HTTPListenAddr is the address the core HTTP mux (agent/mission/task/
+	// telemetry APIs, admin UI, swagger) listens on. Falls back to ":8080"
+	// when unset, same pattern as GRPCListenAddr.
+	HTTPListenAddr    string           `yaml:"http_listen_addr"`
 	GRPCListenAddr    string           `yaml:"grpc_listen_addr"`
 	GRPCAdvertiseAddr string           `yaml:"grpc_advertise_addr"`
 	PocketBase        PocketBaseConfig `yaml:"pocketbase"`

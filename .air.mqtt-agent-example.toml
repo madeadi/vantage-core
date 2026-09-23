@@ -3,7 +3,7 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  args_bin = []
+  args_bin = ["-core-url", "http://127.0.0.1:8321", "-key", "dev-key-abc123"]
   bin = "./tmp/mqtt-agent-example"
   cmd = "go build -o ./tmp/mqtt-agent-example ./cmd/mqtt-agent-example"
   delay = 1000

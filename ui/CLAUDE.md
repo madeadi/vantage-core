@@ -19,7 +19,7 @@ There is no test runner configured.
 
 The dev server proxies to two backend processes that must be running (`cd ..`):
 
-- **core** (`cmd/core`) on `:8080` — serves Connect RPC under `/api.v1.*`, plus `/agents`, `/missions`, `/swagger`, and a legacy server-rendered SSE dashboard at `/ui/`.
+- **core** (`cmd/core`) on `:8321` — serves Connect RPC under `/api.v1.*`, plus `/agents`, `/missions`, `/swagger`, and a legacy server-rendered SSE dashboard at `/ui/`.
 - **embedded PocketBase** on `:8090` — auth + collections, proxied as `/api/*` and `/_/` (admin UI).
 
 `make dev-core` from the repo root starts both. In a deployed setup the UI is served same-origin, so `pb.ts` uses a relative base URL (`/`) and no proxy is involved.

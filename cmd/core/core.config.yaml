@@ -4,6 +4,7 @@
 # Core loads them at startup and live-reloads on every create/update/delete.
 # On first boot each empty collection is seeded with the previous dev fixtures.
 
+http_listen_addr: ":8321"
 grpc_listen_addr: ":9090"
 grpc_advertise_addr: "localhost:9090"
 

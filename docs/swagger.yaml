@@ -99,7 +99,7 @@ definitions:
       name:
         type: string
     type: object
-host: localhost:8080
+host: localhost:8321
 info:
   contact: {}
   description: VantageOS backend — agentsdk registry and task management.

@@ -1,8 +1,16 @@
+.PHONY: dev
+dev:
+	$(MAKE) -j2 dev-core dev-ui
+
 dev-core:
 	air -c .air.core.toml
 
 dev-mqtt-agent:
 	air -c .air.mqtt-agent-example.toml
+
+dev-ui:
+	cd ui && npm run dev
+
 
 .PHONY: proto
 proto:

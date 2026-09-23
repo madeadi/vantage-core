@@ -1,7 +1,7 @@
 // @title           VantageOS Core API
 // @version         1.0
 // @description     VantageOS backend — agentsdk registry and task management.
-// @host            localhost:8080
+// @host            localhost:8321
 // @BasePath        /
 package main
 
@@ -157,6 +157,10 @@ func main() {
 	// they just never receive anything to publish until ingest is running.
 	liveBroadcaster := live.New()
 
+	httpListenAddr := cfg.HTTPListenAddr
+	if httpListenAddr == "" {
+		httpListenAddr = ":8080"
+	}
 	grpcListenAddr := cfg.GRPCListenAddr
 	if grpcListenAddr == "" {
 		grpcListenAddr = ":9090"
@@ -243,8 +247,8 @@ func main() {
 		}
 	}()
 
-	slog.Info("HTTP listening", "addr", ":8080")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	slog.Info("HTTP listening", "addr", httpListenAddr)
+	if err := http.ListenAndServe(httpListenAddr, mux); err != nil {
 		slog.Error("server stopped", "err", err)
 	}
 }
