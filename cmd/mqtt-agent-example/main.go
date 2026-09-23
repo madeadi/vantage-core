@@ -36,16 +36,38 @@ type AgentTelemetry struct {
 }
 
 func main() {
-	id := flag.String("id", "mqtt-agent-example", "agent id -- also the mqtt client id")
-	prefix := flag.String("prefix", "vantageos", "mqtt topic prefix")
-	broker := flag.String("broker", "tcp://127.0.0.1:1883", "mqtt broker URL")
-	username := flag.String("username", "", "mqtt username (defaults to -id)")
-	password := flag.String("password", "", "mqtt password")
+	id := flag.String("id", "mqtt-agent-example", "agent id -- also the mqtt client id (ignored with -core-url, see below)")
+	prefix := flag.String("prefix", "vantageos", "mqtt topic prefix (ignored with -core-url)")
+	broker := flag.String("broker", "tcp://127.0.0.1:1883", "mqtt broker URL (ignored with -core-url)")
+	username := flag.String("username", "", "mqtt username (defaults to -id; ignored with -core-url)")
+	password := flag.String("password", "", "mqtt password (ignored with -core-url)")
 	interval := flag.Duration("interval", 5*time.Second, "telemetry publish interval")
+
+	// -core-url + -key bootstrap from a device key via POST /agents/register
+	// (spec Step 15) instead of the four flags above -- the broker URL,
+	// username, password, topic prefix, and even the agent's own id all come
+	// from core's response, matching how a real deployed agent would be
+	// provisioned (one device key, nothing else to configure by hand).
+	coreURL := flag.String("core-url", "", "core's HTTP base URL, e.g. http://127.0.0.1:8080 -- when set, bootstraps via POST /agents/register instead of -broker/-username/-password/-id/-prefix")
+	deviceKey := flag.String("key", "", "device key (agents.key) for -core-url registration")
 	flag.Parse()
 
 	if *username == "" {
 		*username = *id
+	}
+
+	if *coreURL != "" {
+		resp, err := agentsdk.Register(*coreURL, *deviceKey)
+		if err != nil {
+			slog.Error("registration failed", "core_url", *coreURL, "error", err)
+			os.Exit(1)
+		}
+		if resp.BrokerURL == "" {
+			slog.Error("registration succeeded but returned no broker credentials -- is mqtt.enabled true on this core instance?", "core_url", *coreURL)
+			os.Exit(1)
+		}
+		*id, *prefix, *broker, *username, *password = resp.AgentID, resp.TopicPrefix, resp.BrokerURL, resp.Username, resp.Password
+		slog.Info("registered via core", "core_url", *coreURL, "agent_id", *id, "broker", *broker)
 	}
 
 	agent := agentsdk.NewAgent(*id, *prefix, *broker, *username, *password)

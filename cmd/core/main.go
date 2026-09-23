@@ -186,7 +186,7 @@ func main() {
 
 	mr := service.NewMissionRegistry(missions)
 	mc := controller2.NewMissionController(mr, grpcAdvertiseAddr)
-	ac := controller2.NewAgentController(ar)
+	ac := controller2.NewAgentController(ar, cfg.MQTT)
 
 	ui := NewUI(ar, tRepo, mr, poseListener)
 

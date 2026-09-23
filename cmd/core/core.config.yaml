@@ -23,6 +23,11 @@ mqtt:
   username: ""
   password: ""
   topic_prefix: "vantageos"
+  # Handed to agents at registration (spec Step 15) instead of `broker`
+  # above when set -- for a deployment where core's own connection address
+  # differs from what an agent should dial (e.g. an internal hostname vs. a
+  # public one). Leave unset to hand agents the same address core itself uses.
+  broker_advertise_url: ""
 
 # Postgres/TimescaleDB persistence for validated telemetry (see
 # cmd/core/telemetry/store) and Step 9's event-throttling window. Off by

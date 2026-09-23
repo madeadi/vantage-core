@@ -8,15 +8,17 @@ import (
 )
 
 type AuthService struct {
-	mu         sync.RWMutex
-	regTokens  map[string]string
-	authTokens map[string]string
+	mu            sync.RWMutex
+	regTokens     map[string]string
+	authTokens    map[string]string
+	mqttPasswords map[string]string
 }
 
 func NewAuthService() AuthService {
 	return AuthService{
-		regTokens:  make(map[string]string),
-		authTokens: make(map[string]string),
+		regTokens:     make(map[string]string),
+		authTokens:    make(map[string]string),
+		mqttPasswords: make(map[string]string),
 	}
 }
 
@@ -69,6 +71,29 @@ func (a *AuthService) Authenticate(id string, authToken string) bool {
 	}
 
 	return token == authToken
+}
+
+// IssueMQTTCredentials mints a fresh random broker password for id,
+// overwriting any previously issued one -- same re-issue-on-every-call
+// behavior as ExchangeRegToken's authToken, so a stale password stops
+// working once the agent re-registers (spec Step 15). The broker username
+// is always id itself, never generated here: that is what makes the %u ACL
+// substitution in specs/mqtt_telemetry.specs.md resolve.
+func (a *AuthService) IssueMQTTCredentials(id string) (password string, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	password, err = a.generateRandomHex(24)
+	if err != nil {
+		return "", err
+	}
+	// Stored (not just returned) so a future admin-facing lookup or
+	// broker-provisioning integration has somewhere to read the
+	// currently-issued password from -- core itself never authenticates
+	// MQTT connections (the broker's own auth backend does, per the Ops
+	// section), so nothing in this codebase reads mqttPasswords back yet.
+	a.mqttPasswords[id] = password
+	return password, nil
 }
 
 func (a *AuthService) generateRandomHex(n int) (string, error) {

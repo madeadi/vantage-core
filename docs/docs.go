@@ -126,10 +126,27 @@ const docTemplate = `{
         "agentsdk.RegisterResponse": {
             "type": "object",
             "properties": {
+                "agent_id": {
+                    "description": "AgentID is the id core resolved the device key to -- the same\nserver-side resolution ExchangeRegToken already does for the gRPC\npath, just also handed back here so an MQTT agent can bootstrap from\nnothing but a device key, without needing to already know (and\npossibly mismatch) its own id.",
+                    "type": "string"
+                },
+                "broker_url": {
+                    "description": "MQTT broker credentials (spec Step 15). BrokerURL/TopicPrefix are the\nsame for every agent; Username is always AgentID (that is what makes\nthe %u ACL substitution in specs/mqtt_telemetry.specs.md resolve);\nPassword is minted fresh on every registration, mirroring Token's own\nre-issuance-on-every-call behavior.",
+                    "type": "string"
+                },
                 "grpc_addr": {
                     "type": "string"
                 },
+                "password": {
+                    "type": "string"
+                },
                 "token": {
+                    "type": "string"
+                },
+                "topic_prefix": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }

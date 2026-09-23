@@ -74,6 +74,12 @@ func (r *AgentRegistry) ExchangeRegToken(regToken string) (string, string, error
 	return r.authService.ExchangeRegToken(regToken)
 }
 
+// IssueMQTTCredentials mints a fresh broker password for agentID (spec Step
+// 15). See AuthService.IssueMQTTCredentials.
+func (r *AgentRegistry) IssueMQTTCredentials(agentID model.AgentID) (string, error) {
+	return r.authService.IssueMQTTCredentials(string(agentID))
+}
+
 func (r *AgentRegistry) Register(agentID model.AgentID, skills []model.AgentSkill, cameras []agentsdk.CameraConfig) {
 	slog.Info("Registering Agent", "agentsdk", agentID, "skills", len(skills))
 	for _, skill := range skills {

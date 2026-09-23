@@ -39,6 +39,14 @@ type MQTTConfig struct {
 	Username    string `yaml:"username"`
 	Password    string `yaml:"password"`
 	TopicPrefix string `yaml:"topic_prefix"` // must match the prefix agents publish under
+	// BrokerAdvertiseURL is the broker address handed to agents at
+	// registration (spec Step 15), same reasoning as
+	// grpc_listen_addr/grpc_advertise_addr: core's own connection address
+	// (Broker, above) may not be what a remote agent should dial (e.g. an
+	// internal hostname vs. a public one). Falls back to Broker when unset,
+	// so a deployment where core and agents share the same reachable
+	// address needs only one setting.
+	BrokerAdvertiseURL string `yaml:"broker_advertise_url"`
 }
 
 // TelemetryConfig configures Step 12's Postgres/TimescaleDB persistence and

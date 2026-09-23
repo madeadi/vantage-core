@@ -2,8 +2,10 @@ package controller
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
+	"vantageos-core/cmd/core/config"
 	"vantageos-core/cmd/core/model"
 	"vantageos-core/cmd/core/service"
 	"vantageos-core/pkg/agentsdk"
@@ -16,11 +18,18 @@ type registerRequest struct {
 }
 
 type AgentController struct {
-	ar *service.AgentRegistry
+	ar   *service.AgentRegistry
+	mqtt config.MQTTConfig
 }
 
-func NewAgentController(r *service.AgentRegistry) *AgentController {
-	return &AgentController{ar: r}
+// NewAgentController returns a controller serving /agents routes. mqttCfg is
+// used only by handleRegister (spec Step 15): when mqttCfg.Enabled, a
+// successful registration also mints and returns broker credentials
+// alongside the existing gRPC token, leaving mqttCfg zero-valued has the
+// same effect as before this feature existed -- no broker fields in the
+// response.
+func NewAgentController(r *service.AgentRegistry, mqttCfg config.MQTTConfig) *AgentController {
+	return &AgentController{ar: r, mqtt: mqttCfg}
 }
 
 func (r *AgentController) RegisterRoutes(mux *http.ServeMux) {
@@ -118,9 +127,45 @@ func (r *AgentController) handleRegister(w http.ResponseWriter, req *http.Reques
 
 	r.ar.Register(agentID, body.Skills, body.Cameras)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(agentsdk.RegisterResponse{
+	resp := agentsdk.RegisterResponse{
 		Token:    authToken,
 		GRPCAddr: r.ar.GrpcAdvertiseAddr(),
-	})
+		AgentID:  id,
+	}
+
+	if r.mqtt.Enabled {
+		// Re-validate the agent id as a legal topic segment before it
+		// becomes a broker credential (spec Step 15) -- an agent validating
+		// its own id proves nothing, and an id containing '/' or an MQTT
+		// wildcard would break the fixed-depth topic layout the %u ACL
+		// patterns depend on. id itself already comes from a trusted
+		// PocketBase record (Step 1's ExchangeRegToken lookup), but the
+		// "agents" collection's agent_id field has no such format
+		// constraint enforced at the database level.
+		if _, err := agentsdk.NewTopic(r.mqtt.TopicPrefix, id); err != nil {
+			slog.Error("agents/register: agent id is not a valid mqtt topic segment", "agent_id", id, "err", err)
+			http.Error(w, "agent id is not valid for mqtt", http.StatusInternalServerError)
+			return
+		}
+
+		password, err := r.ar.IssueMQTTCredentials(agentID)
+		if err != nil {
+			slog.Error("agents/register: failed to issue mqtt credentials", "agent_id", id, "err", err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		brokerURL := r.mqtt.BrokerAdvertiseURL
+		if brokerURL == "" {
+			brokerURL = r.mqtt.Broker
+		}
+
+		resp.BrokerURL = brokerURL
+		resp.Username = id // must be the agent id -- see IssueMQTTCredentials's doc comment
+		resp.Password = password
+		resp.TopicPrefix = r.mqtt.TopicPrefix
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }

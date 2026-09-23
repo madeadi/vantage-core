@@ -21,9 +21,31 @@ definitions:
     - CameraTypeWebRtc
   agentsdk.RegisterResponse:
     properties:
+      agent_id:
+        description: |-
+          AgentID is the id core resolved the device key to -- the same
+          server-side resolution ExchangeRegToken already does for the gRPC
+          path, just also handed back here so an MQTT agent can bootstrap from
+          nothing but a device key, without needing to already know (and
+          possibly mismatch) its own id.
+        type: string
+      broker_url:
+        description: |-
+          MQTT broker credentials (spec Step 15). BrokerURL/TopicPrefix are the
+          same for every agent; Username is always AgentID (that is what makes
+          the %u ACL substitution in specs/mqtt_telemetry.specs.md resolve);
+          Password is minted fresh on every registration, mirroring Token's own
+          re-issuance-on-every-call behavior.
+        type: string
       grpc_addr:
         type: string
+      password:
+        type: string
       token:
+        type: string
+      topic_prefix:
+        type: string
+      username:
         type: string
     type: object
   controller.agentView:
